@@ -1,0 +1,255 @@
+const express = require('express');
+const cors = require('cors');
+const cheerio = require('cheerio');
+const path = require('path');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// Scrape package details from URL
+app.post('/api/scrape', async (req, res) => {
+  try {
+    const { url } = req.body;
+
+    if (!url || !url.includes('holidays.flightsandpackages.com')) {
+      return res.status(400).json({ error: 'Invalid URL. Must be from holidays.flightsandpackages.com' });
+    }
+
+    // Dynamic import for node-fetch (ESM)
+    const fetch = (await import('node-fetch')).default;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.status}`);
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // Extract package details
+    const packageData = {
+      title: '',
+      price: '',
+      duration: '',
+      included: [],
+      itinerary: [],
+      highlights: [],
+      accommodation: []
+    };
+
+    // First, try to extract from JSON-LD structured data (most complete)
+    console.log('Looking for JSON-LD scripts...');
+    $('script[type="application/ld+json"]').each((i, script) => {
+      try {
+        const jsonData = JSON.parse($(script).html());
+        console.log('Found JSON-LD type:', jsonData['@type']);
+
+        // Check for FAQPage with "What is included" question
+        if (jsonData['@type'] === 'FAQPage' && jsonData.mainEntity) {
+          console.log('Found FAQPage with', jsonData.mainEntity.length, 'questions');
+          jsonData.mainEntity.forEach(faq => {
+            if (faq.name && faq.name.toLowerCase().includes('included')) {
+              console.log('Found included FAQ:', faq.name);
+              // Normalize newlines to spaces (data often has line breaks mid-item)
+              const answer = (faq.acceptedAnswer?.text || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ');
+              console.log('Answer:', answer.substring(0, 100));
+              // Parse "The package includes: item1, item2, item3"
+              const includesMatch = answer.match(/includes?:?\s*(.+)/i);
+              if (includesMatch) {
+                console.log('Matched includes text, splitting...');
+                // Split by comma, handling various formats
+                const items = includesMatch[1].split(',');
+                console.log('Found', items.length, 'items');
+                items.forEach(item => {
+                  const cleaned = item.trim().replace(/\.$/, '').replace(/^\s+|\s+$/g, '');
+                  if (cleaned && cleaned.length > 2) {
+                    // Avoid duplicates
+                    if (!packageData.included.some(existing =>
+                      existing.toLowerCase() === cleaned.toLowerCase())) {
+                      packageData.included.push(cleaned);
+                    }
+                  }
+                });
+                console.log('After JSON-LD, included has', packageData.included.length, 'items');
+              }
+            }
+          });
+        }
+
+        // Check for TouristTrip schema
+        if (jsonData['@type'] === 'TouristTrip') {
+          if (jsonData.name && !packageData.title) {
+            packageData.title = jsonData.name;
+          }
+          if (jsonData.duration) {
+            packageData.duration = jsonData.duration.replace('P', '').replace('D', ' Days');
+          }
+          if (jsonData.offers?.price) {
+            packageData.price = '£' + jsonData.offers.price;
+          }
+        }
+      } catch (e) {
+        // Invalid JSON, skip
+      }
+    });
+
+    // Title - try multiple selectors (fallback if not from JSON-LD)
+    if (!packageData.title) {
+      packageData.title = $('h1').first().text().trim() ||
+                          $('[class*="title"]').first().text().trim() ||
+                          $('title').text().split('|')[0].trim();
+    }
+
+    // Price - look for price patterns
+    const priceText = $('body').text();
+    const priceMatch = priceText.match(/(?:from\s*)?£(\d{1,},?\d*)/i);
+    if (priceMatch) {
+      packageData.price = '£' + priceMatch[1];
+    }
+
+    // Duration
+    const durationMatch = priceText.match(/(\d+)\s*(?:days?|nights?)/i);
+    if (durationMatch) {
+      packageData.duration = durationMatch[0];
+    }
+
+    // What's Included - only scrape HTML if JSON-LD didn't give us data
+    // Be precise: only grab lists that are direct children of "What's Included" sections
+    if (packageData.included.length === 0) {
+      // Find headings that specifically say "What's Included" (not just "includes")
+      $('h1, h2, h3, h4, h5, h6').each((i, heading) => {
+        const headingText = $(heading).text().toLowerCase().trim();
+        if (headingText.includes("what's included") || headingText.includes('whats included')) {
+          // Get the next sibling elements until we hit another heading
+          let next = $(heading).next();
+          let maxElements = 5; // Don't go too far
+
+          while (next.length && maxElements > 0) {
+            const tagName = next.prop('tagName')?.toLowerCase();
+
+            // Stop if we hit another heading (new section)
+            if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) break;
+
+            // Extract from ul/ol lists
+            if (tagName === 'ul' || tagName === 'ol') {
+              next.find('li').each((j, li) => {
+                const text = $(li).text().trim().replace(/\s+/g, ' ');
+                if (text && text.length > 3 && !packageData.included.includes(text)) {
+                  packageData.included.push(text);
+                }
+              });
+            }
+
+            // Also check if this element contains lists (for wrapper divs)
+            if (tagName === 'div' || tagName === 'section') {
+              next.find('> ul li, > ol li, > div > ul li, > div > ol li').each((j, li) => {
+                const text = $(li).text().trim().replace(/\s+/g, ' ');
+                if (text && text.length > 3 && !packageData.included.includes(text)) {
+                  packageData.included.push(text);
+                }
+              });
+            }
+
+            next = next.next();
+            maxElements--;
+          }
+        }
+      });
+    }
+
+    // Itinerary - look for day patterns
+    const dayRegex = /day\s*(\d+)[:\s-]*(.+?)(?=day\s*\d+|$)/gi;
+    const bodyText = $('body').text();
+    let match;
+    while ((match = dayRegex.exec(bodyText)) !== null) {
+      const dayNum = match[1];
+      let description = match[2].trim().substring(0, 300);
+      // Clean up the description
+      description = description.replace(/\s+/g, ' ').trim();
+      if (description.length > 10) {
+        packageData.itinerary.push({
+          day: parseInt(dayNum),
+          description: description
+        });
+      }
+    }
+
+    // Deduplicate itinerary
+    const seen = new Set();
+    packageData.itinerary = packageData.itinerary.filter(item => {
+      const key = item.day;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).sort((a, b) => a.day - b.day);
+
+    // Clean up included items - remove junk
+    const junkPatterns = [
+      /^home$/i,
+      /^packages?$/i,
+      /^thailand\s*holidays?$/i,
+      /^about(\s+us)?$/i,
+      /^contact(\s+us)?$/i,
+      /^faq$/i,
+      /holidays?$/i,
+      /^from\s*£/i,
+      /- from £/i,
+      /^\d+\s*nights?.*(?:from\s*£|holiday|package|trip)/i,  // "7 Nights Thailand from £999" (other packages)
+      /^\d+\s*night\s+trip/i,
+      /solo\s+trip/i,
+      /^we strongly recommend/i,
+      /travel insurance/i,
+      /nature lovers?$/i,
+      /photography enthusiasts?$/i,
+      /beach lovers?$/i,
+      /relaxation seekers?$/i,
+      /^\.\.\.and \d+ more/i,
+    ];
+
+    packageData.included = packageData.included.filter(item => {
+      // Skip items that match junk patterns
+      for (const pattern of junkPatterns) {
+        if (pattern.test(item)) return false;
+      }
+      // Skip items that are just the package title
+      if (item.toLowerCase() === packageData.title.toLowerCase()) return false;
+      // Skip very short items
+      if (item.length < 10) return false;
+      // Skip items that look like other package recommendations
+      if (item.includes('£') && item.includes('Night')) return false;
+      return true;
+    });
+
+    // Deduplicate included (case-insensitive)
+    const seenIncluded = new Set();
+    packageData.included = packageData.included.filter(item => {
+      const lower = item.toLowerCase();
+      if (seenIncluded.has(lower)) return false;
+      seenIncluded.add(lower);
+      return true;
+    });
+
+    res.json(packageData);
+
+  } catch (error) {
+    console.error('Scrape error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Serve the main page
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`QuoteMaster running at http://localhost:${PORT}`);
+});

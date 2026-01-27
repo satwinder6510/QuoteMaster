@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuoteMaster - Holiday Quote Builder</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .container { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #1a365d;
+    }
+    h2 {
+      font-size: 16px;
+      margin-bottom: 12px;
+      color: #2d3748;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+    }
+    h3 {
+      font-size: 14px;
+      margin: 16px 0 8px;
+      color: #4a5568;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #4a5568;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #4299e1;
+      box-shadow: 0 0 0 3px rgba(66,153,225,0.2);
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #4299e1;
+      color: white;
+    }
+    .btn-primary:hover { background: #3182ce; }
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+    .btn-secondary:hover { background: #cbd5e0; }
+    .btn-success {
+      background: #48bb78;
+      color: white;
+    }
+    .btn-success:hover { background: #38a169; }
+    .btn-danger {
+      background: #fc8181;
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+    .btn-danger:hover { background: #f56565; }
+    .section { margin-bottom: 20px; }
+    .item-list {
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .item {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+    .item:last-child { border-bottom: none; }
+    .item:hover { background: #f7fafc; }
+    .item-date {
+      font-weight: 600;
+      color: #2b6cb0;
+      min-width: 80px;
+    }
+    .item-content { flex: 1; margin: 0 12px; }
+    .flight-row {
+      display: grid;
+      grid-template-columns: 100px 80px 80px 100px 80px 80px auto;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .flight-row input {
+      margin-bottom: 0;
+      padding: 8px;
+      font-size: 13px;
+    }
+    .included-item {
+      display: flex;
+      align-items: center;
+      padding: 4px 0;
+    }
+    .included-item input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+    }
+    #preview {
+      background: white;
+      min-height: 400px;
+    }
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #718096;
+    }
+    .error {
+      background: #fed7d7;
+      color: #c53030;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    .success {
+      background: #c6f6d5;
+      color: #276749;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    .add-row {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .add-row input { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Left Panel - Input -->
+    <div class="panel">
+      <h1>QuoteMaster</h1>
+
+      <!-- Customer Details -->
+      <div class="section">
+        <h2>Customer Details</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label>Customer Name</label>
+            <input type="text" id="customerName" placeholder="John Smith">
+          </div>
+          <div>
+            <label>Quote Reference</label>
+            <input type="text" id="quoteRef" placeholder="Auto-generated" readonly>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+          <div>
+            <label>Package Title</label>
+            <input type="text" id="packageTitleManual" placeholder="e.g. 7 Nights Cambodia Adventure" onchange="generatePreview()">
+          </div>
+          <div>
+            <label>Price (per person)</label>
+            <input type="text" id="priceManual" placeholder="£1,299" onchange="generatePreview()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Package URL -->
+      <div class="section">
+        <h2>Import from URL</h2>
+        <label>Package URL</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="url" id="packageUrl" placeholder="https://holidays.flightsandpackages.com/..." style="flex:1; margin-bottom:0;">
+          <button class="btn-primary" onclick="scrapeUrl()">Import</button>
+        </div>
+        <div id="scrapeStatus"></div>
+      </div>
+
+      <!-- Package Details (populated from URL) -->
+      <div class="section" id="packageSection" style="display:none;">
+        <h2>Package Details</h2>
+        <label>Package Title</label>
+        <input type="text" id="packageTitle">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label>Price (per person)</label>
+            <input type="text" id="packagePrice" placeholder="£999">
+          </div>
+          <div>
+            <label>Duration</label>
+            <input type="text" id="packageDuration" placeholder="7 days">
+          </div>
+        </div>
+        <label>What's Included</label>
+        <div id="includedList" class="item-list"></div>
+      </div>
+
+      <!-- Flights -->
+      <div class="section">
+        <h2>Flights</h2>
+        <div style="margin-bottom: 12px;">
+          <button class="btn-primary" onclick="showPasteModal()">Paste Flights</button>
+          <button class="btn-secondary" onclick="addFlight()">+ Add Manually</button>
+        </div>
+        <div id="flights"></div>
+      </div>
+
+      <!-- Paste Modal -->
+      <div id="pasteModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; padding:20px;">
+        <div style="background:white; max-width:700px; margin:40px auto; border-radius:8px; padding:20px; max-height:90vh; overflow-y:auto;">
+          <h2 style="margin-bottom:16px;">Paste Flight Details</h2>
+          <p style="font-size:13px; color:#718096; margin-bottom:12px;">
+            Paste flight information from any website (Google Flights, Skyscanner, airline sites, etc.)
+          </p>
+          <textarea id="pasteInput" placeholder="Paste flight details here...
+
+Examples of formats that work:
+• BA123 LHR-ATH 15 Mar Dep 06:40 Arr 12:35
+• 15 March 2026 London (LHR) → Athens (ATH) 06:40 - 12:35
+• Flight BA643 departing 06:40 arriving 12:35
+• Or just paste directly from any booking site!" style="min-height:150px; font-family:monospace;"></textarea>
+
+          <div id="parsedPreview" style="margin-top:16px; display:none;">
+            <h3 style="margin-bottom:8px;">Parsed Flights (review & edit)</h3>
+            <div id="parsedFlights"></div>
+          </div>
+
+          <div style="margin-top:16px; display:flex; gap:8px; justify-content:flex-end;">
+            <button class="btn-secondary" onclick="closePasteModal()">Cancel</button>
+            <button class="btn-primary" onclick="parseAndPreview()">Parse</button>
+            <button class="btn-success" id="addParsedBtn" onclick="addParsedFlights()" style="display:none;">Add to Quote</button>
+          </div>
+
+          <div style="margin-top:16px; padding-top:16px; border-top:1px solid #e2e8f0;">
+            <details>
+              <summary style="cursor:pointer; font-size:13px; color:#718096;">Supported formats & tips</summary>
+              <div style="font-size:12px; color:#718096; margin-top:8px;">
+                <p><strong>The parser recognizes:</strong></p>
+                <ul style="margin:8px 0; padding-left:20px;">
+                  <li>Airport codes (LHR, ATH, JFK, etc.)</li>
+                  <li>Flight numbers (BA123, EZY456, etc.)</li>
+                  <li>Dates (15 Mar 2026, 15/03/2026, March 15, etc.)</li>
+                  <li>Times (06:40, 6:40am, 18:30, etc.)</li>
+                  <li>Routes (LHR → ATH, LHR to ATH, LHR-ATH)</li>
+                </ul>
+                <p><strong>Supported formats:</strong></p>
+                <ul style="margin:8px 0; padding-left:20px;">
+                  <li>GDS format (1. AI 128 U 28JAN LHRBOM...)</li>
+                  <li>Itinerary format (Departing from X, Arriving at Y)</li>
+                  <li>Booking format (Outbound: / Inbound:)</li>
+                </ul>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <!-- Additional Items -->
+      <div class="section">
+        <h2>Additional Items</h2>
+        <div class="add-row">
+          <input type="date" id="newItemDate">
+          <input type="text" id="newItemDesc" placeholder="Transfer, excursion, hotel...">
+          <button class="btn-secondary" onclick="addItem()">Add</button>
+        </div>
+        <div id="additionalItems" class="item-list"></div>
+      </div>
+
+      <!-- Notes -->
+      <div class="section">
+        <h2>Additional Notes</h2>
+        <textarea id="notes" placeholder="Any special requests, important information..."></textarea>
+      </div>
+    </div>
+
+    <!-- Right Panel - Preview -->
+    <div class="panel">
+      <div class="preview-header">
+        <h2 style="margin:0; border:none; padding:0;">Quote Preview</h2>
+        <div class="button-group">
+          <button class="btn-primary" onclick="generatePreview()">Refresh Preview</button>
+          <button class="btn-success" onclick="copyToClipboard()">Copy for Outlook</button>
+        </div>
+      </div>
+      <div id="preview">
+        <p style="color:#718096; text-align:center; padding:40px;">Import a package or add items to see preview</p>
+      </div>
+      <div id="copyStatus"></div>
+    </div>
+  </div>
+
+  <script src="flight-parser.js"></script>
+  <script>
+    // Generate quote reference
+    const quoteRef = 'QM-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    document.getElementById('quoteRef').value = quoteRef;
+
+    // State
+    let packageData = null;
+    let flights = [];
+    let additionalItems = [];
+    let selectedInclusions = [];
+
+    // Scrape URL
+    async function scrapeUrl() {
+      const url = document.getElementById('packageUrl').value;
+      const status = document.getElementById('scrapeStatus');
+
+      if (!url) {
+        status.innerHTML = '<div class="error">Please enter a URL</div>';
+        return;
+      }
+
+      status.innerHTML = '<div class="loading">Importing package details...</div>';
+
+      try {
+        const res = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error);
+
+        packageData = data;
+        document.getElementById('packageTitle').value = data.title || '';
+        document.getElementById('packagePrice').value = data.price || '';
+        document.getElementById('packageDuration').value = data.duration || '';
+
+        // Render inclusions
+        selectedInclusions = [...(data.included || [])];
+        renderInclusions();
+
+        document.getElementById('packageSection').style.display = 'block';
+        status.innerHTML = '<div class="success">Package imported successfully!</div>';
+
+        generatePreview();
+
+      } catch (err) {
+        status.innerHTML = `<div class="error">Error: ${err.message}</div>`;
+      }
+    }
+
+    function renderInclusions() {
+      const container = document.getElementById('includedList');
+      if (selectedInclusions.length === 0) {
+        container.innerHTML = '<div class="item" style="color:#718096;">No inclusions found</div>';
+        return;
+      }
+      container.innerHTML = selectedInclusions.map((item, i) => `
+        <div class="item">
+          <input type="checkbox" checked onchange="toggleInclusion(${i}, this.checked)">
+          <span class="item-content">${item}</span>
+          <button class="btn-danger" onclick="removeInclusion(${i})">X</button>
+        </div>
+      `).join('');
+    }
+
+    function toggleInclusion(index, checked) {
+      // Keep in array but mark for display
+      generatePreview();
+    }
+
+    function removeInclusion(index) {
+      selectedInclusions.splice(index, 1);
+      renderInclusions();
+      generatePreview();
+    }
+
+    // Flights
+    function addFlight() {
+      flights.push({
+        date: '',
+        from: '',
+        to: '',
+        flight: '',
+        dep: '',
+        arr: ''
+      });
+      renderFlights();
+    }
+
+    function renderFlights() {
+      const container = document.getElementById('flights');
+      container.innerHTML = flights.map((f, i) => `
+        <div class="flight-row">
+          <input type="date" value="${f.date}" onchange="updateFlight(${i}, 'date', this.value)" placeholder="Date">
+          <input type="text" value="${f.from}" onchange="updateFlight(${i}, 'from', this.value)" placeholder="From">
+          <input type="text" value="${f.to}" onchange="updateFlight(${i}, 'to', this.value)" placeholder="To">
+          <input type="text" value="${f.flight}" onchange="updateFlight(${i}, 'flight', this.value)" placeholder="Flight #">
+          <input type="text" value="${f.dep}" onchange="updateFlight(${i}, 'dep', this.value)" placeholder="Dep">
+          <input type="text" value="${f.arr}" onchange="updateFlight(${i}, 'arr', this.value)" placeholder="Arr">
+          <button class="btn-danger" onclick="removeFlight(${i})">X</button>
+        </div>
+      `).join('');
+    }
+
+    function updateFlight(index, field, value) {
+      flights[index][field] = value;
+      generatePreview();
+    }
+
+    function removeFlight(index) {
+      flights.splice(index, 1);
+      renderFlights();
+      generatePreview();
+    }
+
+    // Additional Items
+    function addItem() {
+      const date = document.getElementById('newItemDate').value;
+      const desc = document.getElementById('newItemDesc').value;
+
+      if (!desc) return;
+
+      additionalItems.push({ date, desc });
+      additionalItems.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+      renderAdditionalItems();
+      document.getElementById('newItemDesc').value = '';
+      generatePreview();
+    }
+
+    function renderAdditionalItems() {
+      const container = document.getElementById('additionalItems');
+      if (additionalItems.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = additionalItems.map((item, i) => `
+        <div class="item">
+          <span class="item-date">${item.date ? formatDate(item.date) : 'TBC'}</span>
+          <span class="item-content">${item.desc}</span>
+          <button class="btn-danger" onclick="removeItem(${i})">X</button>
+        </div>
+      `).join('');
+    }
+
+    function removeItem(index) {
+      additionalItems.splice(index, 1);
+      renderAdditionalItems();
+      generatePreview();
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+
+    function formatDateLong(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    // Generate Preview (Outlook-safe HTML)
+    function generatePreview() {
+      const customerName = document.getElementById('customerName').value || 'Valued Customer';
+      const ref = document.getElementById('quoteRef').value;
+      const title = document.getElementById('packageTitleManual').value || document.getElementById('packageTitle').value || 'Holiday Package';
+      const price = document.getElementById('priceManual').value || document.getElementById('packagePrice').value || 'TBC';
+      const duration = document.getElementById('packageDuration').value || '';
+      const notes = document.getElementById('notes').value;
+
+      // Get checked inclusions
+      const checkedInclusions = [];
+      document.querySelectorAll('#includedList input[type="checkbox"]:checked').forEach((cb, i) => {
+        if (selectedInclusions[i]) checkedInclusions.push(selectedInclusions[i]);
+      });
+
+      // Build Outlook-safe HTML (tables + inline styles)
+      let html = `
+        <table cellpadding="0" cellspacing="0" border="0" width="600" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; border-collapse: collapse;">
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #1a365d; padding: 20px; text-align: center;">
+              <font color="#ffffff"><span style="font-size: 24px; font-weight: bold; color: #ffffff;">Holiday Quote</span></font><br>
+              <font color="#ffffff"><span style="font-size: 12px; color: #ffffff; margin-top: 8px;">Reference: ${ref}</span></font>
+            </td>
+          </tr>
+
+          <!-- Customer -->
+          <tr>
+            <td style="padding: 16px; background-color: #f7fafc;">
+              <div style="font-size: 12px; color: #718096;">Prepared for</div>
+              <div style="font-size: 18px; font-weight: bold; color: #2d3748;">${customerName}</div>
+            </td>
+          </tr>
+
+          <!-- Package Title -->
+          <tr>
+            <td style="padding: 16px; border-bottom: 2px solid #e2e8f0;">
+              <div style="font-size: 18px; font-weight: bold; color: #1a365d;">${title}</div>
+              ${duration ? `<div style="font-size: 14px; color: #718096; margin-top: 4px;">${duration}</div>` : ''}
+            </td>
+          </tr>
+      `;
+
+      // Build unified itinerary: flights + additional items, sorted by date
+      const itinerary = [];
+
+      flights.forEach(f => {
+        if (f.from || f.to || f.flight) {
+          const fromName = window.FlightParser ? window.FlightParser.getAirportName(f.from) : f.from;
+          const toName = window.FlightParser ? window.FlightParser.getAirportName(f.to) : f.to;
+          itinerary.push({
+            date: f.date || '',
+            type: 'flight',
+            content: `✈ ${fromName} → ${toName} | ${f.flight} | Dep ${f.dep} Arr ${f.arr}`
+          });
+        }
+      });
+
+      additionalItems.forEach(item => {
+        itinerary.push({
+          date: item.date || '',
+          type: 'item',
+          content: item.desc
+        });
+      });
+
+      itinerary.sort((a, b) => (a.date || 'zzz').localeCompare(b.date || 'zzz'));
+
+      if (itinerary.length > 0) {
+        html += `
+          <tr>
+            <td style="padding: 16px;">
+              <div style="font-size: 14px; font-weight: bold; color: #2d3748; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">ITINERARY</div>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size: 13px;">
+        `;
+        itinerary.forEach(item => {
+          html += `
+            <tr>
+              <td style="padding: 6px 0; width: 80px; color: #2b6cb0; font-weight: bold; vertical-align: top;">${item.date ? formatDate(item.date) : 'TBC'}</td>
+              <td style="padding: 6px 0;">${item.content}</td>
+            </tr>
+          `;
+        });
+        html += `</table></td></tr>`;
+      }
+
+      // What's Included
+      if (checkedInclusions.length > 0) {
+        html += `
+          <tr>
+            <td style="padding: 16px; background-color: #f7fafc;">
+              <div style="font-size: 14px; font-weight: bold; color: #2d3748; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">WHAT'S INCLUDED</div>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size: 13px;">
+        `;
+        checkedInclusions.forEach(item => {
+          html += `
+            <tr>
+              <td style="padding: 4px 0; padding-left: 16px;">✓ ${item}</td>
+            </tr>
+          `;
+        });
+        html += `</table></td></tr>`;
+      }
+
+      // Notes
+      if (notes) {
+        html += `
+          <tr>
+            <td style="padding: 16px;">
+              <div style="font-size: 14px; font-weight: bold; color: #2d3748; margin-bottom: 8px;">NOTES</div>
+              <div style="font-size: 13px; color: #4a5568; white-space: pre-wrap;">${notes}</div>
+            </td>
+          </tr>
+        `;
+      }
+
+      // Price
+      html += `
+          <tr>
+            <td style="padding: 20px; background-color: #1a365d; text-align: center;">
+              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">Total Price</span></font><br>
+              <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${price}</span></font><br>
+              <font color="#ffffff"><span style="font-size: 12px; color: #ffffff;">per person</span></font>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 16px; text-align: center; font-size: 11px; color: #a0aec0;">
+              Quote valid for 7 days | Prices subject to availability<br>
+              Flights and Packages
+            </td>
+          </tr>
+        </table>
+      `;
+
+      document.getElementById('preview').innerHTML = html;
+    }
+
+    // Copy to Clipboard (for Outlook)
+    async function copyToClipboard() {
+      const preview = document.getElementById('preview');
+      const status = document.getElementById('copyStatus');
+
+      try {
+        // Create a blob with HTML content
+        const blob = new Blob([preview.innerHTML], { type: 'text/html' });
+        const clipboardItem = new ClipboardItem({ 'text/html': blob });
+        await navigator.clipboard.write([clipboardItem]);
+
+        status.innerHTML = '<div class="success">Copied! Paste into Outlook with Ctrl+V</div>';
+        setTimeout(() => { status.innerHTML = ''; }, 3000);
+      } catch (err) {
+        // Fallback for older browsers
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(preview);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.execCommand('copy');
+        selection.removeAllRanges();
+
+        status.innerHTML = '<div class="success">Copied! Paste into Outlook with Ctrl+V</div>';
+        setTimeout(() => { status.innerHTML = ''; }, 3000);
+      }
+    }
+
+    // Initialize with empty flight
+    addFlight();
+
+    // ============ PASTE MODAL FUNCTIONS ============
+
+    let parsedFlightsData = [];
+
+    function showPasteModal() {
+      document.getElementById('pasteModal').style.display = 'block';
+      document.getElementById('pasteInput').value = '';
+      document.getElementById('parsedPreview').style.display = 'none';
+      document.getElementById('parsedFlights').innerHTML = '';
+      document.getElementById('addParsedBtn').style.display = 'none';
+      parsedFlightsData = [];
+    }
+
+    function closePasteModal() {
+      document.getElementById('pasteModal').style.display = 'none';
+    }
+
+    function parseAndPreview() {
+      const input = document.getElementById('pasteInput').value;
+      if (!input.trim()) return;
+
+      // Parse using FlightParser
+      parsedFlightsData = window.FlightParser.parse(input);
+
+      if (parsedFlightsData.length === 0) {
+        document.getElementById('parsedPreview').style.display = 'block';
+        document.getElementById('parsedFlights').innerHTML = `
+          <div style="padding: 12px; background: #fed7d7; border-radius: 4px; color: #c53030; font-size: 13px;">
+            Could not parse any flights from the text. Try a different format or add manually.
+          </div>
+        `;
+        document.getElementById('addParsedBtn').style.display = 'none';
+        return;
+      }
+
+      // Render parsed flights for review
+      document.getElementById('parsedPreview').style.display = 'block';
+      document.getElementById('parsedFlights').innerHTML = parsedFlightsData.map((f, i) => `
+        <div style="background: #f7fafc; padding: 12px; margin-bottom: 8px; border-radius: 4px; border: 1px solid #e2e8f0;">
+          <div style="display: grid; grid-template-columns: 100px 80px 80px 100px 80px 80px; gap: 8px; margin-bottom: 8px;">
+            <div>
+              <label style="font-size: 11px; color: #718096;">Date</label>
+              <input type="date" value="${f.date}" onchange="updateParsedFlight(${i}, 'date', this.value)" style="width:100%; padding: 6px; font-size: 12px;">
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #718096;">From</label>
+              <input type="text" value="${f.from}" onchange="updateParsedFlight(${i}, 'from', this.value)" style="width:100%; padding: 6px; font-size: 12px;">
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #718096;">To</label>
+              <input type="text" value="${f.to}" onchange="updateParsedFlight(${i}, 'to', this.value)" style="width:100%; padding: 6px; font-size: 12px;">
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #718096;">Flight</label>
+              <input type="text" value="${f.flight}" onchange="updateParsedFlight(${i}, 'flight', this.value)" style="width:100%; padding: 6px; font-size: 12px;">
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #718096;">Dep</label>
+              <input type="text" value="${f.dep}" onchange="updateParsedFlight(${i}, 'dep', this.value)" style="width:100%; padding: 6px; font-size: 12px;">
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #718096;">Arr</label>
+              <input type="text" value="${f.arr}" onchange="updateParsedFlight(${i}, 'arr', this.value)" style="width:100%; padding: 6px; font-size: 12px;">
+            </div>
+          </div>
+          ${f.airline ? `<div style="font-size: 11px; color: #718096;">Airline: ${f.airline}</div>` : ''}
+        </div>
+      `).join('');
+
+      document.getElementById('addParsedBtn').style.display = 'inline-block';
+    }
+
+    function updateParsedFlight(index, field, value) {
+      parsedFlightsData[index][field] = value;
+    }
+
+    function addParsedFlights() {
+      // Add parsed flights to main array
+      parsedFlightsData.forEach(pf => {
+        flights.push({
+          date: pf.date || '',
+          from: pf.from || '',
+          to: pf.to || '',
+          flight: pf.flight || '',
+          dep: pf.dep || '',
+          arr: pf.arr || ''
+        });
+      });
+
+      renderFlights();
+      generatePreview();
+      closePasteModal();
+      showToast(`Added ${parsedFlightsData.length} flight(s) to quote.`);
+    }
+
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#48bb78;color:white;padding:12px 20px;border-radius:6px;font-size:14px;z-index:2000;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Close modal on background click
+    document.getElementById('pasteModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closePasteModal();
+      }
+    });
+  </script>
+</body>
+</html>
