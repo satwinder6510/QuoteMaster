@@ -607,17 +607,16 @@ Examples of formats that work:
         html += `</table></td></tr>`;
       }
 
-      // Notes
-      if (notes) {
-        html += `
-          <tr>
-            <td style="padding: 16px;">
-              <div style="font-size: 14px; font-weight: bold; color: #2d3748; margin-bottom: 8px;">NOTES</div>
-              <div style="font-size: 13px; color: #4a5568; white-space: pre-wrap;">${notes}</div>
-            </td>
-          </tr>
-        `;
-      }
+      // Notes (always show with passport disclaimer)
+      const passportNote = 'Please ensure your passport is valid for at least six months beyond your return date and that you have obtained any necessary visas. Entry requirements vary by destination and nationality, and it\'s your responsibility to check these before you travel.';
+      html += `
+        <tr>
+          <td style="padding: 16px;">
+            <div style="font-size: 14px; font-weight: bold; color: #2d3748; margin-bottom: 8px;">NOTES</div>
+            <div style="font-size: 13px; color: #4a5568; white-space: pre-wrap;">${passportNote}${notes ? '\n\n' + notes : ''}</div>
+          </td>
+        </tr>
+      `;
 
       // Price
       html += `

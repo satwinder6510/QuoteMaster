@@ -55,17 +55,72 @@ app.post('/api/scrape', async (req, res) => {
         if (jsonData['@type'] === 'FAQPage' && jsonData.mainEntity) {
           console.log('Found FAQPage with', jsonData.mainEntity.length, 'questions');
           jsonData.mainEntity.forEach(faq => {
-            if (faq.name && faq.name.toLowerCase().includes('included')) {
+            if (faq.name && faq.name.toLowerCase().includes('included') &&
+                !faq.name.toLowerCase().includes('not included')) {
               console.log('Found included FAQ:', faq.name);
-              // Normalize newlines to spaces (data often has line breaks mid-item)
-              const answer = (faq.acceptedAnswer?.text || '').replace(/\r?\n/g, ' ').replace(/\s+/g, ' ');
+              // Normalize newlines to spaces and decode HTML entities
+              let answer = (faq.acceptedAnswer?.text || '')
+                .replace(/\r?\n/g, ' ')
+                .replace(/\s+/g, ' ')
+                .replace(/&#61;/g, '=')
+                .replace(/&#39;/g, "'");
               console.log('Answer:', answer.substring(0, 100));
+
               // Parse "The package includes: item1, item2, item3"
               const includesMatch = answer.match(/includes?:?\s*(.+)/i);
               if (includesMatch) {
-                console.log('Matched includes text, splitting...');
-                // Split by comma, handling various formats
-                const items = includesMatch[1].split(',');
+                let content = includesMatch[1];
+                console.log('Matched includes text...');
+
+                // Check if this is section-header format (TOUR GUIDE:, ACCOMMODATION:, MEALS:, etc.)
+                const sectionHeaders = ['TOUR GUIDE:', 'ACCOMMODATION:', 'MEALS:', 'TRANSPORT:', 'ENTRANCE FEES', 'TRANSFERS:'];
+                const hasSectionHeaders = sectionHeaders.some(h => content.includes(h));
+
+                let items = [];
+                if (hasSectionHeaders) {
+                  console.log('Detected section-header format');
+                  // Split by section headers and extract summaries
+                  const sections = content.split(/(?=(?:TOUR GUIDE:|ACCOMMODATION:|MEALS:|TRANSPORT:|ENTRANCE FEES|TRANSFERS:))/i);
+                  sections.forEach(section => {
+                    section = section.trim();
+                    if (!section) return;
+
+                    // For section headers, extract just the key info
+                    if (section.match(/^TOUR GUIDE:/i)) {
+                      const match = section.match(/^TOUR GUIDE:\s*(.+?)(?=ACCOMMODATION|MEALS|TRANSPORT|ENTRANCE|$)/i);
+                      if (match) items.push('Tour Guide: ' + match[1].trim().split(/(?=[A-Z]{2})/)[0].trim());
+                    } else if (section.match(/^ACCOMMODATION:/i)) {
+                      const match = section.match(/(\d+)\s*nights?/i);
+                      if (match) items.push(match[0] + ' accommodation');
+                    } else if (section.match(/^MEALS:/i)) {
+                      const match = section.match(/^MEALS:\s*(.+?)(?=TRANSPORT|ENTRANCE|ACCOMMODATION|$)/i);
+                      if (match) {
+                        let meals = match[1].trim();
+                        // Clean up: "7 Breakfasts3 Dinners" -> "7 Breakfasts, 3 Dinners"
+                        meals = meals.replace(/(\d+)\s*(Breakfasts?|Lunches?|Dinners?)/gi, '$1 $2,');
+                        meals = meals.replace(/,\s*$/, '').replace(/,+/g, ', ');
+                        items.push('Meals: ' + meals);
+                      }
+                    } else if (section.match(/^TRANSPORT:/i)) {
+                      items.push('Airport transfers and transportation throughout');
+                    } else if (section.match(/^ENTRANCE FEES/i)) {
+                      items.push('All entrance fees and activities as per itinerary');
+                    } else if (!section.match(/^[A-Z\s]+:/)) {
+                      // Plain items before section headers (like "Flights Included")
+                      section.split(',').forEach(item => {
+                        const cleaned = item.trim();
+                        if (cleaned && cleaned.length > 2 && !cleaned.match(/^[A-Z\s]+$/)) {
+                          items.push(cleaned);
+                        }
+                      });
+                    }
+                  });
+                } else {
+                  // Standard comma-separated format
+                  console.log('Using comma-separated format');
+                  items = content.split(',');
+                }
+
                 console.log('Found', items.length, 'items');
                 items.forEach(item => {
                   const cleaned = item.trim().replace(/\.$/, '').replace(/^\s+|\s+$/g, '');
