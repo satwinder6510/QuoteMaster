@@ -131,6 +131,17 @@
       padding: 8px;
       font-size: 13px;
     }
+    .train-row {
+      display: grid;
+      grid-template-columns: 100px 1fr 80px 1fr 80px auto;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .train-row input {
+      margin-bottom: 0;
+      padding: 8px;
+      font-size: 13px;
+    }
     .included-item {
       display: flex;
       align-items: center;
@@ -303,6 +314,13 @@ Examples of formats that work:
         </div>
       </div>
 
+      <!-- Trains -->
+      <div class="section">
+        <h2>Trains</h2>
+        <button class="btn-secondary" onclick="addTrain()" style="margin-bottom: 12px;">+ Add Train</button>
+        <div id="trains"></div>
+      </div>
+
       <!-- Additional Items -->
       <div class="section">
         <h2>Additional Items</h2>
@@ -346,6 +364,7 @@ Examples of formats that work:
     // State
     let packageData = null;
     let flights = [];
+    let trains = [];
     let additionalItems = [];
     let selectedInclusions = [];
 
@@ -456,6 +475,47 @@ Examples of formats that work:
       generatePreview();
     }
 
+    // Trains
+    function addTrain() {
+      trains.push({
+        date: '',
+        boardingStation: '',
+        boardingTime: '',
+        disembarkStation: '',
+        disembarkTime: ''
+      });
+      renderTrains();
+    }
+
+    function renderTrains() {
+      const container = document.getElementById('trains');
+      if (trains.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = trains.map((t, i) => `
+        <div class="train-row">
+          <input type="date" value="${t.date}" onchange="updateTrain(${i}, 'date', this.value)" placeholder="Date">
+          <input type="text" value="${t.boardingStation}" onchange="updateTrain(${i}, 'boardingStation', this.value)" placeholder="Boarding Station">
+          <input type="text" value="${t.boardingTime}" onchange="updateTrain(${i}, 'boardingTime', this.value)" placeholder="Time">
+          <input type="text" value="${t.disembarkStation}" onchange="updateTrain(${i}, 'disembarkStation', this.value)" placeholder="Disembark Station">
+          <input type="text" value="${t.disembarkTime}" onchange="updateTrain(${i}, 'disembarkTime', this.value)" placeholder="Arr Time">
+          <button class="btn-danger" onclick="removeTrain(${i})">X</button>
+        </div>
+      `).join('');
+    }
+
+    function updateTrain(index, field, value) {
+      trains[index][field] = value;
+      generatePreview();
+    }
+
+    function removeTrain(index) {
+      trains.splice(index, 1);
+      renderTrains();
+      generatePreview();
+    }
+
     // Additional Items
     function addItem() {
       const date = document.getElementById('newItemDate').value;
@@ -558,6 +618,16 @@ Examples of formats that work:
             date: f.date || '',
             type: 'flight',
             content: `✈ ${fromName} → ${toName} | ${f.flight} | Dep ${f.dep} Arr ${f.arr}`
+          });
+        }
+      });
+
+      trains.forEach(t => {
+        if (t.boardingStation || t.disembarkStation) {
+          itinerary.push({
+            date: t.date || '',
+            type: 'train',
+            content: `🚂 ${t.boardingStation} ${t.boardingTime} → ${t.disembarkStation} ${t.disembarkTime}`
           });
         }
       });
