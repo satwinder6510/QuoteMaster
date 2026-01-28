@@ -231,10 +231,18 @@
           <label>Traveller Names</label>
           <div id="travellerNames"></div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px;">
           <div>
             <label>Price (per person)</label>
             <input type="text" id="priceManual" placeholder="£1,299" onchange="generatePreview()">
+          </div>
+          <div>
+            <label>Deposit</label>
+            <input type="text" id="depositAmount" placeholder="£300" onchange="generatePreview()">
+          </div>
+          <div>
+            <label>Balance Due Date</label>
+            <input type="date" id="balanceDueDate" onchange="generatePreview()">
           </div>
         </div>
       </div>
@@ -660,10 +668,28 @@ Examples of formats that work:
 
       // Calculate total price
       let totalPrice = 'TBC';
+      let totalPriceNum = 0;
       if (price !== 'TBC') {
         const priceNum = parseFloat(price.replace(/[£,]/g, ''));
         if (!isNaN(priceNum)) {
-          totalPrice = '£' + (priceNum * numTravellers).toLocaleString('en-GB', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+          totalPriceNum = priceNum * numTravellers;
+          totalPrice = '£' + totalPriceNum.toLocaleString('en-GB', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        }
+      }
+
+      // Calculate deposit and balance
+      const depositInput = document.getElementById('depositAmount').value;
+      const balanceDueDate = document.getElementById('balanceDueDate').value;
+      let deposit = '';
+      let balance = '';
+      if (depositInput) {
+        const depositNum = parseFloat(depositInput.replace(/[£,]/g, ''));
+        if (!isNaN(depositNum)) {
+          deposit = '£' + depositNum.toLocaleString('en-GB', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+          if (totalPriceNum > 0) {
+            const balanceNum = totalPriceNum - depositNum;
+            balance = '£' + balanceNum.toLocaleString('en-GB', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+          }
         }
       }
 
@@ -797,11 +823,32 @@ Examples of formats that work:
       html += `
           <tr>
             <td style="padding: 20px; background-color: #1a365d; text-align: center;">
-              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person</span></font><br>
+              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person × ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}</span></font><br>
               <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${totalPrice}</span></font><br>
-              <font color="#ffffff"><span style="font-size: 12px; color: #ffffff;">Total for ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}</span></font>
+              <font color="#ffffff"><span style="font-size: 12px; color: #ffffff;">Total Price</span></font>
             </td>
-          </tr>
+          </tr>`;
+
+      // Payment breakdown (if deposit entered)
+      if (deposit) {
+        html += `
+          <tr>
+            <td style="padding: 16px; background-color: #f7fafc;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size: 14px;">
+                <tr>
+                  <td style="padding: 8px 0;"><strong>Deposit Due Now:</strong></td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #2b6cb0;">${deposit}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0;"><strong>Balance Due${balanceDueDate ? ' by ' + formatDateLong(balanceDueDate) : ''}:</strong></td>
+                  <td style="padding: 8px 0; text-align: right; font-weight: bold;">${balance}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+      }
+
+      html += `
 
           <!-- Footer -->
           <tr>
