@@ -142,6 +142,17 @@
       padding: 8px;
       font-size: 13px;
     }
+    .hotel-row {
+      display: grid;
+      grid-template-columns: 100px 100px 1fr auto;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .hotel-row input {
+      margin-bottom: 0;
+      padding: 8px;
+      font-size: 13px;
+    }
     .included-item {
       display: flex;
       align-items: center;
@@ -212,7 +223,7 @@
             <input type="text" id="quoteRef" placeholder="Auto-generated" readonly>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-top: 12px;">
           <div>
             <label>Package Title</label>
             <input type="text" id="packageTitleManual" placeholder="e.g. 7 Nights Cambodia Adventure" onchange="generatePreview()">
@@ -220,6 +231,10 @@
           <div>
             <label>Price (per person)</label>
             <input type="text" id="priceManual" placeholder="£1,299" onchange="generatePreview()">
+          </div>
+          <div>
+            <label>Travellers</label>
+            <input type="number" id="numTravellers" value="1" min="1" max="20" onchange="generatePreview()">
           </div>
         </div>
       </div>
@@ -321,6 +336,13 @@ Examples of formats that work:
         <div id="trains"></div>
       </div>
 
+      <!-- Hotels -->
+      <div class="section">
+        <h2>Hotels</h2>
+        <button class="btn-secondary" onclick="addHotel()" style="margin-bottom: 12px;">+ Add Hotel</button>
+        <div id="hotels"></div>
+      </div>
+
       <!-- Additional Items -->
       <div class="section">
         <h2>Additional Items</h2>
@@ -365,6 +387,7 @@ Examples of formats that work:
     let packageData = null;
     let flights = [];
     let trains = [];
+    let hotels = [];
     let additionalItems = [];
     let selectedInclusions = [];
 
@@ -516,6 +539,43 @@ Examples of formats that work:
       generatePreview();
     }
 
+    // Hotels
+    function addHotel() {
+      hotels.push({
+        checkIn: '',
+        checkOut: '',
+        name: ''
+      });
+      renderHotels();
+    }
+
+    function renderHotels() {
+      const container = document.getElementById('hotels');
+      if (hotels.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = hotels.map((h, i) => `
+        <div class="hotel-row">
+          <input type="date" value="${h.checkIn}" onchange="updateHotel(${i}, 'checkIn', this.value)" title="Check-in">
+          <input type="date" value="${h.checkOut}" onchange="updateHotel(${i}, 'checkOut', this.value)" title="Check-out">
+          <input type="text" value="${h.name}" onchange="updateHotel(${i}, 'name', this.value)" placeholder="Hotel name">
+          <button class="btn-danger" onclick="removeHotel(${i})">X</button>
+        </div>
+      `).join('');
+    }
+
+    function updateHotel(index, field, value) {
+      hotels[index][field] = value;
+      generatePreview();
+    }
+
+    function removeHotel(index) {
+      hotels.splice(index, 1);
+      renderHotels();
+      generatePreview();
+    }
+
     // Additional Items
     function addItem() {
       const date = document.getElementById('newItemDate').value;
@@ -572,6 +632,16 @@ Examples of formats that work:
       const price = document.getElementById('priceManual').value || document.getElementById('packagePrice').value || 'TBC';
       const duration = document.getElementById('packageDuration').value || '';
       const notes = document.getElementById('notes').value;
+      const numTravellers = parseInt(document.getElementById('numTravellers').value) || 1;
+
+      // Calculate total price
+      let totalPrice = 'TBC';
+      if (price !== 'TBC') {
+        const priceNum = parseFloat(price.replace(/[£,]/g, ''));
+        if (!isNaN(priceNum)) {
+          totalPrice = '£' + (priceNum * numTravellers).toLocaleString('en-GB', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        }
+      }
 
       // Get checked inclusions
       const checkedInclusions = [];
@@ -628,6 +698,16 @@ Examples of formats that work:
             date: t.date || '',
             type: 'train',
             content: `🚂 ${t.boardingStation} ${t.boardingTime} → ${t.disembarkStation} ${t.disembarkTime}`
+          });
+        }
+      });
+
+      hotels.forEach(h => {
+        if (h.name) {
+          itinerary.push({
+            date: h.checkIn || '',
+            type: 'hotel',
+            content: `🏨 ${h.name} (${h.checkIn ? formatDate(h.checkIn) : 'TBC'} - ${h.checkOut ? formatDate(h.checkOut) : 'TBC'})`
           });
         }
       });
@@ -693,9 +773,9 @@ Examples of formats that work:
       html += `
           <tr>
             <td style="padding: 20px; background-color: #1a365d; text-align: center;">
-              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">Total Price</span></font><br>
-              <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${price}</span></font><br>
-              <font color="#ffffff"><span style="font-size: 12px; color: #ffffff;">per person</span></font>
+              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person</span></font><br>
+              <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${totalPrice}</span></font><br>
+              <font color="#ffffff"><span style="font-size: 12px; color: #ffffff;">Total for ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}</span></font>
             </td>
           </tr>
 
