@@ -808,16 +808,35 @@ Examples of formats that work:
         html += `</table></td></tr>`;
       }
 
-      // Notes (always show with passport disclaimer)
-      const passportNote = 'Please ensure your passport is valid for at least six months beyond your return date and that you have obtained any necessary visas. Entry requirements vary by destination and nationality, and it\'s your responsibility to check these before you travel.';
+      // Customer Checklist
       html += `
         <tr>
-          <td style="padding: 16px;">
-            <div style="font-size: 14px; font-weight: bold; color: #2d3748; margin-bottom: 8px;">NOTES</div>
-            <div style="font-size: 13px; color: #4a5568; white-space: pre-wrap;">${passportNote}${notes ? '\n\n' + notes : ''}</div>
+          <td style="padding: 16px; background-color: #fffbeb; border: 1px solid #f59e0b;">
+            <div style="font-size: 14px; font-weight: bold; color: #92400e; margin-bottom: 8px;">CUSTOMER CHECKLIST</div>
+            <div style="font-size: 13px; color: #78350f; line-height: 1.6;">
+              • Please check all names shown are as per passport<br>
+              • Please check dates and itinerary are correct<br>
+              • Once you have checked all details are correct please reply back to this email to proceed with the booking<br>
+              • By proceeding you declare that all details are correct and you agree to our terms and conditions<br>
+              • If paying a deposit please note deposits are non-refundable as your arrangements need to be secured<br>
+              • Please ensure your passport is valid for at least six months beyond your return date and that you have obtained any necessary visas. Entry requirements vary by destination and nationality, and it's your responsibility to check these before you travel. We recommend the <a href="https://www.gov.uk/foreign-travel-advice" style="color: #1d4ed8;">Foreign Office Travel Advice website</a><br>
+              • <strong>No arrangements have been reserved as of now as we await your confirmation to proceed</strong>
+            </div>
           </td>
         </tr>
       `;
+
+      // Additional Notes (if any)
+      if (notes) {
+        html += `
+          <tr>
+            <td style="padding: 16px;">
+              <div style="font-size: 14px; font-weight: bold; color: #2d3748; margin-bottom: 8px;">ADDITIONAL NOTES</div>
+              <div style="font-size: 13px; color: #4a5568; white-space: pre-wrap;">${notes}</div>
+            </td>
+          </tr>
+        `;
+      }
 
       // Price
       html += `
