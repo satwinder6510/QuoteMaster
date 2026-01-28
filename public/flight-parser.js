@@ -160,8 +160,8 @@ function parseDate(text) {
 function parseFlights(text) {
   const normalized = text.replace(/\r\n/g, '\n').trim();
 
-  // Try GDS format: 1. AI 128 U 28JAN LHRBOM...
-  if (/^\d+\.\s*[A-Z]{2}\s*\d+/m.test(normalized)) {
+  // Try GDS format: 1. AI 128 U 28JAN LHRBOM... or 1  AI 132 S 20FEB 5 LHRBLR...
+  if (/^\s*\d+\.?\s+[A-Z]{2}\s*\d+/m.test(normalized)) {
     const result = parseGDS(normalized);
     if (result.length > 0) return result;
   }
@@ -189,8 +189,9 @@ function parseFlights(text) {
 }
 
 /**
- * Parse GDS format (Amadeus/Sabre/Galileo)
- * Example: 1. AI  128 U  28JAN LHRBOM AK1  1330  #0410   WE
+ * Parse GDS format (Amadeus/Sabre/Galileo/MSC)
+ * Example 1: 1. AI  128 U  28JAN LHRBOM AK1  1330  #0410   WE
+ * Example 2: 1  AI 132 S 20FEB 5 LHRBLR HK1  2005 2  2105 1220+1 788 E 0
  */
 function parseGDS(text) {
   const flights = [];
@@ -198,15 +199,17 @@ function parseGDS(text) {
 
   for (const line of lines) {
     if (/OPERATED BY/i.test(line)) continue;
+    if (/SEE RTSVC/i.test(line)) continue;
+    if (!line.trim()) continue;
 
-    // More flexible pattern
+    const monthMap = {'JAN':0,'FEB':1,'MAR':2,'APR':3,'MAY':4,'JUN':5,'JUL':6,'AUG':7,'SEP':8,'OCT':9,'NOV':10,'DEC':11};
+
+    // Pattern 1: Original format with dot
     // 1. AI  128 U  28JAN LHRBOM AK1  1330  #0410   WE
-    const m = line.match(/^\s*\d+\.\s*([A-Z]{2})\s*(\d+)\s+\w\s+(\d{1,2})([A-Z]{3})\s+([A-Z]{3})([A-Z]{3})\s+\w+\d?\s+(\d{4})\s+#?(\d{4})/i);
+    let m = line.match(/^\s*\d+\.\s*([A-Z]{2})\s*(\d+)\s+\w\s+(\d{1,2})([A-Z]{3})\s+([A-Z]{3})([A-Z]{3})\s+\w+\d?\s+(\d{4})\s+#?(\d{4})/i);
 
     if (m) {
       const [, airline, flightNum, day, monthStr, from, to, depTime, arrTime] = m;
-
-      const monthMap = {'JAN':0,'FEB':1,'MAR':2,'APR':3,'MAY':4,'JUN':5,'JUL':6,'AUG':7,'SEP':8,'OCT':9,'NOV':10,'DEC':11};
       const month = monthMap[monthStr.toUpperCase()];
       const now = new Date();
       const year = month < now.getMonth() ? now.getFullYear() + 1 : now.getFullYear();
@@ -218,6 +221,34 @@ function parseGDS(text) {
         flight: airline + flightNum,
         dep: depTime.substring(0,2) + ':' + depTime.substring(2,4),
         arr: arrTime.substring(0,2) + ':' + arrTime.substring(2,4),
+        airline: AIRLINE_CODES[airline] || airline,
+        raw: line.trim()
+      });
+      continue;
+    }
+
+    // Pattern 2: MSC format without dot
+    // 1  AI 132 S 20FEB 5 LHRBLR HK1  2005 2  2105 1220+1 788 E 0
+    // 3  AI 133 L 15MAR 7 BLRLHR HK1  1310 2  1410 1930   788 E 0
+    m = line.match(/^\s*\d+\s+([A-Z]{2})\s*(\d+)\s+\w\s+(\d{1,2})([A-Z]{3})\s+\d\s+([A-Z]{3})([A-Z]{3})\s+\w+\d?\s+(\d{4})/i);
+
+    if (m) {
+      const [, airline, flightNum, day, monthStr, from, to, depTime] = m;
+      const month = monthMap[monthStr.toUpperCase()];
+      const now = new Date();
+      const year = month < now.getMonth() ? now.getFullYear() + 1 : now.getFullYear();
+
+      // Find arrival time - last 4 digits before aircraft type, may have +1
+      const arrMatch = line.match(/(\d{4})(?:\+\d)?\s+\d{3}\s+\w/);
+      let arrTime = arrMatch ? arrMatch[1] : '';
+
+      flights.push({
+        date: formatDateISO(year, month, parseInt(day)),
+        from: from.toUpperCase(),
+        to: to.toUpperCase(),
+        flight: airline + flightNum,
+        dep: depTime.substring(0,2) + ':' + depTime.substring(2,4),
+        arr: arrTime ? arrTime.substring(0,2) + ':' + arrTime.substring(2,4) : '',
         airline: AIRLINE_CODES[airline] || airline,
         raw: line.trim()
       });
