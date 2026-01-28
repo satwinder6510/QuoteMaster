@@ -213,28 +213,28 @@
       <!-- Customer Details -->
       <div class="section">
         <h2>Customer Details</h2>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div>
-            <label>Customer Name</label>
-            <input type="text" id="customerName" placeholder="John Smith">
-          </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 100px; gap: 12px;">
           <div>
             <label>Quote Reference</label>
             <input type="text" id="quoteRef" placeholder="Auto-generated" readonly>
           </div>
-        </div>
-        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin-top: 12px;">
           <div>
             <label>Package Title</label>
             <input type="text" id="packageTitleManual" placeholder="e.g. 7 Nights Cambodia Adventure" onchange="generatePreview()">
           </div>
           <div>
+            <label>Travellers</label>
+            <input type="number" id="numTravellers" value="1" min="1" max="20" onchange="updateTravellerFields()">
+          </div>
+        </div>
+        <div style="margin-top: 12px;">
+          <label>Traveller Names</label>
+          <div id="travellerNames"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+          <div>
             <label>Price (per person)</label>
             <input type="text" id="priceManual" placeholder="£1,299" onchange="generatePreview()">
-          </div>
-          <div>
-            <label>Travellers</label>
-            <input type="number" id="numTravellers" value="1" min="1" max="20" onchange="generatePreview()">
           </div>
         </div>
       </div>
@@ -390,6 +390,30 @@ Examples of formats that work:
     let hotels = [];
     let additionalItems = [];
     let selectedInclusions = [];
+    let travellerNames = [''];
+
+    // Traveller name fields
+    function updateTravellerFields() {
+      const num = parseInt(document.getElementById('numTravellers').value) || 1;
+      // Preserve existing names, add/remove as needed
+      while (travellerNames.length < num) travellerNames.push('');
+      while (travellerNames.length > num) travellerNames.pop();
+      renderTravellerFields();
+      generatePreview();
+    }
+
+    function renderTravellerFields() {
+      const container = document.getElementById('travellerNames');
+      container.innerHTML = travellerNames.map((name, i) => `
+        <input type="text" value="${name}" onchange="updateTravellerName(${i}, this.value)"
+               placeholder="Traveller ${i + 1} name" style="margin-bottom: 8px;">
+      `).join('');
+    }
+
+    function updateTravellerName(index, value) {
+      travellerNames[index] = value;
+      generatePreview();
+    }
 
     // Scrape URL
     async function scrapeUrl() {
@@ -626,7 +650,7 @@ Examples of formats that work:
 
     // Generate Preview (Outlook-safe HTML)
     function generatePreview() {
-      const customerName = document.getElementById('customerName').value || 'Valued Customer';
+      const names = travellerNames.filter(n => n.trim()).join(', ') || 'Valued Customer';
       const ref = document.getElementById('quoteRef').value;
       const title = document.getElementById('packageTitleManual').value || document.getElementById('packageTitle').value || 'Holiday Package';
       const price = document.getElementById('priceManual').value || document.getElementById('packagePrice').value || 'TBC';
@@ -664,7 +688,7 @@ Examples of formats that work:
           <tr>
             <td style="padding: 16px; background-color: #f7fafc;">
               <div style="font-size: 12px; color: #718096;">Prepared for</div>
-              <div style="font-size: 18px; font-weight: bold; color: #2d3748;">${customerName}</div>
+              <div style="font-size: 18px; font-weight: bold; color: #2d3748;">${names}</div>
             </td>
           </tr>
 
@@ -819,8 +843,9 @@ Examples of formats that work:
       }
     }
 
-    // Initialize with empty flight
+    // Initialize
     addFlight();
+    renderTravellerFields();
 
     // ============ PASTE MODAL FUNCTIONS ============
 
