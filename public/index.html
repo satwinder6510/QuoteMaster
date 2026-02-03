@@ -755,9 +755,11 @@ Examples of formats that work:
               ? `${cityResult.currency} ${min.toFixed(2)}`
               : `${cityResult.currency} ${min.toFixed(2)} - ${max.toFixed(2)}`;
 
+            const basisLabel = cityResult.basis === 'per_room_per_night' ? 'per room' : 'per person';
+
             detailsHtml += `<div style="font-size:13px; color:#78350f; padding:4px 0;">
               <strong>${cityResult.city}:</strong> ${amountStr}
-              <span style="color:#92400e; font-size:11px;">(${cityNights} nights${cityResult.cappedAt ? ', capped at ' + cityResult.cappedAt : ''})</span>
+              <span style="color:#92400e; font-size:11px;">(${basisLabel}, ${cityNights} nights${cityResult.cappedAt ? ', capped at ' + cityResult.cappedAt : ''})</span>
             </div>`;
           }
         }
@@ -1079,7 +1081,8 @@ Examples of formats that work:
               const perNight = cityResult.min === cityResult.max
                 ? `${cityResult.currency} ${(cityResult.min / cityResult.effectiveNights).toFixed(2)}`
                 : `${cityResult.currency} ${(cityResult.min / cityResult.effectiveNights).toFixed(2)}-${(cityResult.max / cityResult.effectiveNights).toFixed(2)}`;
-              amountStr = `${perNight} per person/night`;
+              const basisLabel = cityResult.basis === 'per_room_per_night' ? 'per room/night' : 'per person/night';
+              amountStr = `${perNight} ${basisLabel}`;
             }
             html += `
                 <tr>
@@ -1119,7 +1122,7 @@ Examples of formats that work:
           <!-- Footer -->
           <tr>
             <td style="padding: 16px; text-align: center; font-size: 11px; color: #a0aec0;">
-              Quote Correct at time of sending | Prices subject to availability | ATOL Protected | Flights and Packages
+              Quote Correct at time of sending | Prices subject to availability | City Taxes last updated 01 Feb 2026 | ATOL Protected | Flights and Packages
             </td>
           </tr>
         </table>
