@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const cheerio = require('cheerio');
 const path = require('path');
+const { findTaxRule, calculateTax, getAvailableCities } = require('./city-taxes');
 
 const app = express();
 app.use(cors());
@@ -297,6 +298,68 @@ app.post('/api/scrape', async (req, res) => {
     console.error('Scrape error:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Get city tax for given cities
+app.post('/api/city-tax', (req, res) => {
+  try {
+    const { cities, nights, persons } = req.body;
+
+    if (!cities || !Array.isArray(cities) || cities.length === 0) {
+      return res.status(400).json({ error: 'Cities array is required' });
+    }
+
+    const nightsNum = parseInt(nights) || 1;
+    const personsNum = parseInt(persons) || 1;
+
+    const results = [];
+    let totalMin = 0;
+    let totalMax = 0;
+    let hasPercentage = false;
+    const currencies = new Set();
+
+    for (const cityName of cities) {
+      const rule = findTaxRule(cityName);
+      if (rule) {
+        const tax = calculateTax(rule, nightsNum, personsNum);
+        if (tax) {
+          results.push(tax);
+          if (tax.isPercentage) {
+            hasPercentage = true;
+          } else {
+            totalMin += tax.min;
+            totalMax += tax.max;
+            currencies.add(tax.currency);
+          }
+        }
+      } else {
+        results.push({
+          city: cityName,
+          notFound: true,
+          notes: 'City tax information not available - please check locally.',
+        });
+      }
+    }
+
+    res.json({
+      cities: results,
+      totals: {
+        min: Math.round(totalMin * 100) / 100,
+        max: Math.round(totalMax * 100) / 100,
+        currencies: Array.from(currencies),
+        hasPercentage,
+        note: hasPercentage ? 'Some cities charge a percentage of room rate - exact amount depends on accommodation cost.' : null,
+      },
+    });
+  } catch (error) {
+    console.error('City tax error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get list of available cities for autocomplete
+app.get('/api/cities', (req, res) => {
+  res.json(getAvailableCities());
 });
 
 // Serve the main page

@@ -351,6 +351,23 @@ Examples of formats that work:
         <div id="hotels"></div>
       </div>
 
+      <!-- Cities (for local tax) -->
+      <div class="section">
+        <h2>Cities Visited (for local tax calculation)</h2>
+        <div style="display: grid; grid-template-columns: 1fr 80px 80px auto; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="newCityName" placeholder="City name (e.g., Venice, Rome)" list="cityList" style="margin-bottom: 0;">
+          <input type="number" id="newCityNights" placeholder="Nights" min="1" value="1" style="margin-bottom: 0;">
+          <input type="number" id="newCityPersons" placeholder="Persons" min="1" style="margin-bottom: 0;" readonly>
+          <button class="btn-secondary" onclick="addCity()">Add</button>
+        </div>
+        <datalist id="cityList"></datalist>
+        <div id="citiesList" class="item-list"></div>
+        <div id="cityTaxSummary" style="margin-top: 12px; padding: 12px; background: #fffbeb; border-radius: 4px; display: none;">
+          <div style="font-weight: bold; color: #92400e; margin-bottom: 8px;">Estimated Local Taxes (Pay Locally)</div>
+          <div id="cityTaxDetails"></div>
+        </div>
+      </div>
+
       <!-- Additional Items -->
       <div class="section">
         <h2>Additional Items</h2>
@@ -399,6 +416,8 @@ Examples of formats that work:
     let additionalItems = [];
     let selectedInclusions = [];
     let travellerNames = [''];
+    let cities = []; // { name, nights }
+    let cityTaxData = null; // API response
 
     // Traveller name fields
     function updateTravellerFields() {
@@ -407,6 +426,9 @@ Examples of formats that work:
       while (travellerNames.length < num) travellerNames.push('');
       while (travellerNames.length > num) travellerNames.pop();
       renderTravellerFields();
+      // Sync persons field and recalculate city tax
+      document.getElementById('newCityPersons').value = num;
+      if (cities.length > 0) fetchCityTax();
       generatePreview();
     }
 
@@ -606,6 +628,169 @@ Examples of formats that work:
       hotels.splice(index, 1);
       renderHotels();
       generatePreview();
+    }
+
+    // Cities (for local tax)
+    async function loadCityList() {
+      try {
+        const res = await fetch('/api/cities');
+        const cities = await res.json();
+        const datalist = document.getElementById('cityList');
+        datalist.innerHTML = cities.map(c => `<option value="${c}">`).join('');
+      } catch (e) {
+        console.error('Failed to load city list:', e);
+      }
+    }
+
+    function addCity() {
+      const name = document.getElementById('newCityName').value.trim();
+      const nights = parseInt(document.getElementById('newCityNights').value) || 1;
+
+      if (!name) return;
+
+      cities.push({ name, nights });
+      document.getElementById('newCityName').value = '';
+      document.getElementById('newCityNights').value = '1';
+      renderCities();
+      fetchCityTax();
+    }
+
+    function removeCity(index) {
+      cities.splice(index, 1);
+      renderCities();
+      fetchCityTax();
+    }
+
+    function updateCityNights(index, nights) {
+      cities[index].nights = parseInt(nights) || 1;
+      fetchCityTax();
+    }
+
+    function renderCities() {
+      const container = document.getElementById('citiesList');
+      if (cities.length === 0) {
+        container.innerHTML = '<div class="item" style="color:#718096;">No cities added</div>';
+        return;
+      }
+      container.innerHTML = cities.map((c, i) => `
+        <div class="item">
+          <span class="item-content" style="flex:2;">${c.name}</span>
+          <input type="number" value="${c.nights}" min="1" style="width:60px; margin:0; padding:4px;" onchange="updateCityNights(${i}, this.value)">
+          <span style="color:#718096; font-size:12px; margin-left:4px;">nights</span>
+          <button class="btn-danger" onclick="removeCity(${i})" style="margin-left:8px;">X</button>
+        </div>
+      `).join('');
+    }
+
+    async function fetchCityTax() {
+      const summaryDiv = document.getElementById('cityTaxSummary');
+      const detailsDiv = document.getElementById('cityTaxDetails');
+      const numPersons = parseInt(document.getElementById('numTravellers').value) || 1;
+
+      if (cities.length === 0) {
+        summaryDiv.style.display = 'none';
+        cityTaxData = null;
+        generatePreview();
+        return;
+      }
+
+      try {
+        // Aggregate nights per city (in case same city added multiple times)
+        const cityNightsMap = {};
+        cities.forEach(c => {
+          const key = c.name.toLowerCase();
+          cityNightsMap[key] = (cityNightsMap[key] || 0) + c.nights;
+        });
+
+        // Fetch tax for each unique city
+        const cityNames = Object.keys(cityNightsMap);
+        const totalNights = Object.values(cityNightsMap).reduce((a, b) => a + b, 0);
+
+        const res = await fetch('/api/city-tax', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cities: cityNames,
+            nights: totalNights,
+            persons: numPersons
+          })
+        });
+
+        const data = await res.json();
+
+        // Recalculate per-city with correct nights
+        let detailsHtml = '';
+        let totalMin = 0;
+        let totalMax = 0;
+        const currencies = new Set();
+
+        for (const cityResult of data.cities) {
+          const cityNights = cityNightsMap[cityResult.city?.toLowerCase()] || 1;
+
+          if (cityResult.notFound) {
+            detailsHtml += `<div style="font-size:13px; color:#78350f; padding:4px 0;">
+              <strong>${cityResult.city || 'Unknown'}:</strong> Tax info not available
+            </div>`;
+          } else if (cityResult.isPercentage) {
+            detailsHtml += `<div style="font-size:13px; color:#78350f; padding:4px 0;">
+              <strong>${cityResult.city}:</strong> ${cityResult.percentRate}% of room rate
+              <span style="color:#92400e; font-size:11px;">(${cityResult.notes})</span>
+            </div>`;
+          } else {
+            // Recalculate with correct nights per city
+            let min, max;
+            if (cityResult.basis === 'per_room_per_night') {
+              min = (cityResult.min / cityResult.effectiveNights) * Math.min(cityNights, cityResult.cappedAt || cityNights);
+              max = (cityResult.max / cityResult.effectiveNights) * Math.min(cityNights, cityResult.cappedAt || cityNights);
+            } else {
+              min = (cityResult.min / cityResult.effectiveNights) * Math.min(cityNights, cityResult.cappedAt || cityNights);
+              max = (cityResult.max / cityResult.effectiveNights) * Math.min(cityNights, cityResult.cappedAt || cityNights);
+            }
+
+            totalMin += min;
+            totalMax += max;
+            currencies.add(cityResult.currency);
+
+            const amountStr = min === max
+              ? `${cityResult.currency} ${min.toFixed(2)}`
+              : `${cityResult.currency} ${min.toFixed(2)} - ${max.toFixed(2)}`;
+
+            detailsHtml += `<div style="font-size:13px; color:#78350f; padding:4px 0;">
+              <strong>${cityResult.city}:</strong> ${amountStr}
+              <span style="color:#92400e; font-size:11px;">(${cityNights} nights${cityResult.cappedAt ? ', capped at ' + cityResult.cappedAt : ''})</span>
+            </div>`;
+          }
+        }
+
+        // Total
+        if (totalMin > 0 || totalMax > 0) {
+          const curr = Array.from(currencies)[0] || 'EUR';
+          const totalStr = totalMin === totalMax
+            ? `${curr} ${totalMin.toFixed(2)}`
+            : `${curr} ${totalMin.toFixed(2)} - ${totalMax.toFixed(2)}`;
+          detailsHtml += `<div style="font-size:14px; font-weight:bold; color:#92400e; padding-top:8px; border-top:1px solid #fcd34d; margin-top:8px;">
+            Estimated Total: ${totalStr}
+          </div>`;
+        }
+
+        // Store for preview
+        cityTaxData = {
+          cities: data.cities,
+          totalMin,
+          totalMax,
+          currencies: Array.from(currencies),
+          hasPercentage: data.totals.hasPercentage
+        };
+
+        detailsDiv.innerHTML = detailsHtml;
+        summaryDiv.style.display = 'block';
+        generatePreview();
+
+      } catch (e) {
+        console.error('Failed to fetch city tax:', e);
+        detailsDiv.innerHTML = '<div style="color:#c53030;">Failed to calculate city tax</div>';
+        summaryDiv.style.display = 'block';
+      }
     }
 
     // Additional Items
@@ -841,15 +1026,74 @@ Examples of formats that work:
         `;
       }
 
-      // Price
+      // Price - Pay Now section
       html += `
           <tr>
             <td style="padding: 20px; background-color: #1a365d; text-align: center;">
+              <font color="#ffffff"><span style="font-size: 12px; color: #90cdf4;">PAY NOW</span></font><br>
               <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person × ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}</span></font><br>
-              <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${totalPrice}</span></font><br>
-              <font color="#ffffff"><span style="font-size: 12px; color: #ffffff;">Total Price</span></font>
+              <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${totalPrice}</span></font>
             </td>
           </tr>`;
+
+      // Pay Locally section (city tax)
+      if (cityTaxData && (cityTaxData.totalMin > 0 || cityTaxData.totalMax > 0 || cityTaxData.hasPercentage)) {
+        const curr = cityTaxData.currencies[0] || 'EUR';
+        let localTaxStr = '';
+        if (cityTaxData.totalMin > 0 || cityTaxData.totalMax > 0) {
+          localTaxStr = cityTaxData.totalMin === cityTaxData.totalMax
+            ? `${curr} ${cityTaxData.totalMin.toFixed(2)}`
+            : `${curr} ${cityTaxData.totalMin.toFixed(2)} - ${cityTaxData.totalMax.toFixed(2)}`;
+        }
+        if (cityTaxData.hasPercentage) {
+          localTaxStr += (localTaxStr ? ' + ' : '') + 'percentage fees (see below)';
+        }
+
+        html += `
+          <tr>
+            <td style="padding: 16px; background-color: #fffbeb; border: 2px solid #f59e0b;">
+              <div style="text-align: center;">
+                <div style="font-size: 12px; color: #92400e; font-weight: bold; margin-bottom: 4px;">PAY LOCALLY (City Tax)</div>
+                <div style="font-size: 20px; font-weight: bold; color: #78350f;">${localTaxStr}</div>
+                <div style="font-size: 11px; color: #92400e; margin-top: 8px;">City/tourist tax payable directly at your accommodation</div>
+              </div>
+            </td>
+          </tr>`;
+
+        // City breakdown
+        html += `
+          <tr>
+            <td style="padding: 12px; background-color: #fefce8;">
+              <div style="font-size: 12px; color: #92400e; margin-bottom: 8px;"><strong>City Tax Breakdown:</strong></div>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size: 12px; color: #78350f;">`;
+
+        cities.forEach(c => {
+          const cityResult = cityTaxData.cities.find(cr =>
+            cr.city && cr.city.toLowerCase() === c.name.toLowerCase()
+          );
+          if (cityResult && !cityResult.notFound) {
+            let amountStr;
+            if (cityResult.isPercentage) {
+              amountStr = `${cityResult.percentRate}% of room rate`;
+            } else {
+              const perNight = cityResult.min === cityResult.max
+                ? `${cityResult.currency} ${(cityResult.min / cityResult.effectiveNights).toFixed(2)}`
+                : `${cityResult.currency} ${(cityResult.min / cityResult.effectiveNights).toFixed(2)}-${(cityResult.max / cityResult.effectiveNights).toFixed(2)}`;
+              amountStr = `${perNight} per person/night`;
+            }
+            html += `
+                <tr>
+                  <td style="padding: 4px 0;">${c.name}</td>
+                  <td style="padding: 4px 0; text-align: right;">${amountStr}</td>
+                </tr>`;
+          }
+        });
+
+        html += `
+              </table>
+            </td>
+          </tr>`;
+      }
 
       // Payment breakdown (if deposit entered)
       if (deposit) {
@@ -915,6 +1159,15 @@ Examples of formats that work:
     // Initialize
     addFlight();
     renderTravellerFields();
+    renderCities();
+    loadCityList();
+
+    // Sync persons field with travellers
+    function syncPersonsField() {
+      const numTravellers = document.getElementById('numTravellers').value;
+      document.getElementById('newCityPersons').value = numTravellers;
+    }
+    syncPersonsField();
 
     // ============ PASTE MODAL FUNCTIONS ============
 
