@@ -2,12 +2,106 @@ const express = require('express');
 const cors = require('cors');
 const cheerio = require('cheerio');
 const path = require('path');
-const { findTaxRule, calculateTax, getAvailableCities } = require('./city-taxes');
+const crypto = require('crypto');
+const { findTaxRule, calculateTax, getAvailableCities, getAllTaxEntries, setTaxEntry, deleteTaxEntry } = require('./city-taxes');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
+
+// Admin authentication
+const ADMIN_PASSWORD = 'admin123';
+const adminSessions = new Map(); // token -> { created: Date }
+
+// Clean up expired sessions (older than 24 hours)
+function cleanupSessions() {
+  const now = Date.now();
+  for (const [token, session] of adminSessions) {
+    if (now - session.created > 24 * 60 * 60 * 1000) {
+      adminSessions.delete(token);
+    }
+  }
+}
+
+// Middleware to check admin auth
+function requireAdminAuth(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  if (!token || !adminSessions.has(token)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+// Admin login
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    const token = crypto.randomBytes(32).toString('hex');
+    adminSessions.set(token, { created: Date.now() });
+    cleanupSessions();
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ error: 'Invalid password' });
+  }
+});
+
+// Admin logout
+app.post('/api/admin/logout', (req, res) => {
+  const token = req.headers['x-admin-token'];
+  if (token) {
+    adminSessions.delete(token);
+  }
+  res.json({ success: true });
+});
+
+// Get all tax entries (admin)
+app.get('/api/admin/taxes', requireAdminAuth, (req, res) => {
+  res.json(getAllTaxEntries());
+});
+
+// Add new tax entry (admin)
+app.post('/api/admin/taxes', requireAdminAuth, (req, res) => {
+  const { id, entry } = req.body;
+  if (!id || !entry || !entry.city || !entry.countryCode || !entry.basis) {
+    return res.status(400).json({ error: 'Missing required fields: id, entry.city, entry.countryCode, entry.basis' });
+  }
+
+  const success = setTaxEntry(id, entry);
+  if (success) {
+    res.json({ success: true, id, entry });
+  } else {
+    res.status(500).json({ error: 'Failed to save tax entry' });
+  }
+});
+
+// Update existing tax entry (admin)
+app.put('/api/admin/taxes/:id', requireAdminAuth, (req, res) => {
+  const { id } = req.params;
+  const { entry } = req.body;
+
+  if (!entry || !entry.city || !entry.countryCode || !entry.basis) {
+    return res.status(400).json({ error: 'Missing required fields: entry.city, entry.countryCode, entry.basis' });
+  }
+
+  const success = setTaxEntry(id, entry);
+  if (success) {
+    res.json({ success: true, id, entry });
+  } else {
+    res.status(500).json({ error: 'Failed to update tax entry' });
+  }
+});
+
+// Delete tax entry (admin)
+app.delete('/api/admin/taxes/:id', requireAdminAuth, (req, res) => {
+  const { id } = req.params;
+  const success = deleteTaxEntry(id);
+  if (success) {
+    res.json({ success: true, id });
+  } else {
+    res.status(404).json({ error: 'Tax entry not found' });
+  }
+});
 
 // Scrape package details from URL
 app.post('/api/scrape', async (req, res) => {
@@ -365,6 +459,11 @@ app.get('/api/cities', (req, res) => {
 // Serve the main page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Serve the admin page
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 const PORT = process.env.PORT || 3000;

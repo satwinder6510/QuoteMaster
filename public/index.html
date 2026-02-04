@@ -419,6 +419,31 @@ Examples of formats that work:
     let cities = []; // { name, nights }
     let cityTaxData = null; // API response
 
+    // Exchange rates to GBP (update these periodically)
+    // Rate = how many units of foreign currency per 1 GBP
+    const exchangeRates = {
+      GBP: 1,
+      EUR: 1.18,  // 1 GBP = 1.18 EUR
+      USD: 1.27,  // 1 GBP = 1.27 USD
+      CHF: 1.12,  // 1 GBP = 1.12 CHF
+      CZK: 29.5,  // 1 GBP = 29.5 CZK
+      JPY: 190,   // 1 GBP = 190 JPY
+      AED: 4.65,  // 1 GBP = 4.65 AED
+      HRK: 8.40,  // 1 GBP = 8.40 HRK (Croatian Kuna, legacy)
+    };
+    const ratesLastUpdated = '04 Feb 2025';
+
+    // Convert foreign currency to GBP
+    function convertToGBP(amount, currency) {
+      const rate = exchangeRates[currency];
+      if (!rate) return { gbp: amount, rate: 1, currency: 'GBP' }; // fallback
+      return {
+        gbp: amount / rate,
+        rate: rate,
+        currency: currency
+      };
+    }
+
     // Traveller name fields
     function updateTravellerFields() {
       const num = parseInt(document.getElementById('numTravellers').value) || 1;
@@ -1028,37 +1053,92 @@ Examples of formats that work:
         `;
       }
 
-      // Price - Pay Now section
+      // Calculate city tax string for display
+      let localTaxStr = '';
+      let localTaxGBP = 0;
+      let hasCityTax = false;
+      const taxCurrency = cityTaxData?.currencies?.[0] || 'EUR';
+      let conversionInfo = null;
+
+      if (cityTaxData && (cityTaxData.totalMin > 0 || cityTaxData.totalMax > 0 || cityTaxData.hasPercentage)) {
+        hasCityTax = true;
+        if (cityTaxData.totalMin > 0 || cityTaxData.totalMax > 0) {
+          // Use max for the total display (conservative estimate)
+          const taxAmount = cityTaxData.totalMax || cityTaxData.totalMin;
+          const conversion = convertToGBP(taxAmount, taxCurrency);
+          localTaxGBP = conversion.gbp;
+          conversionInfo = conversion;
+
+          localTaxStr = cityTaxData.totalMin === cityTaxData.totalMax
+            ? `${taxCurrency} ${cityTaxData.totalMin.toFixed(2)}`
+            : `${taxCurrency} ${cityTaxData.totalMin.toFixed(2)} - ${cityTaxData.totalMax.toFixed(2)}`;
+        }
+        if (cityTaxData.hasPercentage) {
+          localTaxStr += (localTaxStr ? ' + ' : '') + 'percentage fees';
+        }
+      }
+
+      // Calculate GBP equivalent string for city tax
+      let localTaxGBPStr = '';
+      if (localTaxGBP > 0 && taxCurrency !== 'GBP') {
+        localTaxGBPStr = `£${localTaxGBP.toFixed(2)}`;
+      }
+
+      // TOTAL COSTS FOR THIS HOLIDAY (all in GBP)
+      let grandTotalGBP = totalPriceNum + localTaxGBP;
+      let grandTotalStr = totalPrice;
+      if (totalPriceNum > 0 && hasCityTax) {
+        grandTotalStr = '£' + grandTotalGBP.toLocaleString('en-GB', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+      }
+
       html += `
           <tr>
             <td style="padding: 20px; background-color: #1a365d; text-align: center;">
-              <font color="#ffffff"><span style="font-size: 12px; color: #90cdf4;">PAY NOW</span></font><br>
-              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person × ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}</span></font><br>
-              <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${totalPrice}</span></font>
+              <font color="#ffffff"><span style="font-size: 12px; color: #90cdf4;">TOTAL COSTS FOR THIS HOLIDAY</span></font><br>
+              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person × ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}${hasCityTax ? ' + City Tax' : ''}</span></font><br>
+              <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${grandTotalStr}</span></font>
             </td>
           </tr>`;
 
-      // Pay Locally section (city tax)
-      if (cityTaxData && (cityTaxData.totalMin > 0 || cityTaxData.totalMax > 0 || cityTaxData.hasPercentage)) {
-        const curr = cityTaxData.currencies[0] || 'EUR';
-        let localTaxStr = '';
-        if (cityTaxData.totalMin > 0 || cityTaxData.totalMax > 0) {
-          localTaxStr = cityTaxData.totalMin === cityTaxData.totalMax
-            ? `${curr} ${cityTaxData.totalMin.toFixed(2)}`
-            : `${curr} ${cityTaxData.totalMin.toFixed(2)} - ${cityTaxData.totalMax.toFixed(2)}`;
-        }
-        if (cityTaxData.hasPercentage) {
-          localTaxStr += (localTaxStr ? ' + ' : '') + 'percentage fees (see below)';
-        }
+      // PAY NOW section (package price only)
+      html += `
+          <tr>
+            <td style="padding: 16px; background-color: #2d3748;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: left;">
+                    <font color="#a0aec0"><span style="font-size: 12px; color: #a0aec0;">PAY NOW</span></font><br>
+                    <font color="#ffffff"><span style="font-size: 11px; color: #cbd5e0;">Holiday package payable to us</span></font>
+                  </td>
+                  <td style="text-align: right;">
+                    <font color="#ffffff"><span style="font-size: 22px; font-weight: bold; color: #ffffff;">${totalPrice}</span></font>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+
+      // PAY LOCALLY section (city tax)
+      if (hasCityTax) {
+        const rateNote = conversionInfo && conversionInfo.currency !== 'GBP'
+          ? `<br><span style="font-size: 10px; color: #b45309;">Exchange rate: 1 GBP = ${conversionInfo.rate} ${conversionInfo.currency} (as of ${ratesLastUpdated})</span>`
+          : '';
 
         html += `
           <tr>
             <td style="padding: 16px; background-color: #fffbeb; border: 2px solid #f59e0b;">
-              <div style="text-align: center;">
-                <div style="font-size: 12px; color: #92400e; font-weight: bold; margin-bottom: 4px;">PAY LOCALLY (City Tax)</div>
-                <div style="font-size: 20px; font-weight: bold; color: #78350f;">${localTaxStr}</div>
-                <div style="font-size: 11px; color: #92400e; margin-top: 8px;">City/tourist tax payable directly at your accommodation</div>
-              </div>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: left;">
+                    <span style="font-size: 12px; color: #92400e; font-weight: bold;">PAY LOCALLY</span><br>
+                    <span style="font-size: 11px; color: #b45309;">City tax payable at your accommodation</span>${rateNote}
+                  </td>
+                  <td style="text-align: right;">
+                    <span style="font-size: 22px; font-weight: bold; color: #78350f;">${localTaxGBPStr || localTaxStr}</span>
+                    ${localTaxGBPStr ? `<br><span style="font-size: 12px; color: #92400e;">(${localTaxStr})</span>` : ''}
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>`;
 

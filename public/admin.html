@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>City Tax Admin - QuoteMaster</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #333; margin-bottom: 20px; }
+
+    /* Login form */
+    .login-container {
+      max-width: 400px;
+      margin: 100px auto;
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .login-container h2 { margin-bottom: 20px; text-align: center; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: #007bff;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-primary:hover { background: #0056b3; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #1e7e34; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #545b62; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    .error { color: #dc3545; margin-top: 10px; }
+    .success { color: #28a745; margin-top: 10px; }
+
+    /* Admin panel */
+    .admin-panel { display: none; }
+    .admin-panel.active { display: block; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    /* Table */
+    .table-container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #333;
+    }
+    tr:hover { background: #f8f9fa; }
+    .actions { white-space: nowrap; }
+    .actions button { margin-right: 5px; }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.active { display: flex; }
+    .modal-content {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-header h3 { margin: 0; }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #999;
+    }
+    .close-btn:hover { color: #333; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .rate-fields { margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px; }
+    .rate-fields h4 { margin-bottom: 10px; font-size: 14px; }
+
+    .hidden { display: none !important; }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      color: #007bff;
+      text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <!-- Login Form -->
+  <div id="loginContainer" class="login-container">
+    <h2>Admin Login</h2>
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" required placeholder="Enter admin password">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width: 100%">Login</button>
+      <p id="loginError" class="error"></p>
+    </form>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel" class="admin-panel container">
+    <a href="/" class="back-link">&larr; Back to QuoteMaster</a>
+
+    <div class="header">
+      <h1>City Tax Administration</h1>
+      <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+    </div>
+
+    <div class="toolbar">
+      <button id="addNewBtn" class="btn btn-success">+ Add New City</button>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>City</th>
+            <th>Country</th>
+            <th>Basis</th>
+            <th>Rate</th>
+            <th>Cap Nights</th>
+            <th>Notes</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="taxTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">Add City Tax</h3>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="taxForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="taxId">ID (e.g., IT_ROME, FR_PARIS)</label>
+            <input type="text" id="taxId" required placeholder="CC_CITY">
+          </div>
+          <div class="form-group">
+            <label for="taxCity">City Name</label>
+            <input type="text" id="taxCity" required placeholder="City name">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="taxCountry">Country Code</label>
+            <input type="text" id="taxCountry" required maxlength="2" placeholder="IT, FR, ES...">
+          </div>
+          <div class="form-group">
+            <label for="taxBasis">Basis</label>
+            <select id="taxBasis" required>
+              <option value="per_person_per_night">Per Person Per Night</option>
+              <option value="per_room_per_night">Per Room Per Night</option>
+              <option value="percent_of_room_rate">Percentage of Room Rate</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="fixedRangeFields" class="rate-fields">
+          <h4>Rate Configuration</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="rateType">Rate Type</label>
+              <select id="rateType">
+                <option value="fixed">Fixed Amount</option>
+                <option value="range">Min/Max Range</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="taxCurrency">Currency</label>
+              <input type="text" id="taxCurrency" value="EUR" placeholder="EUR, GBP, USD...">
+            </div>
+          </div>
+          <div id="fixedFields" class="form-row">
+            <div class="form-group">
+              <label for="taxFixedAmount">Fixed Amount</label>
+              <input type="number" id="taxFixedAmount" step="0.01" placeholder="0.00">
+            </div>
+          </div>
+          <div id="rangeFields" class="form-row hidden">
+            <div class="form-group">
+              <label for="taxMinRate">Min Rate</label>
+              <input type="number" id="taxMinRate" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label for="taxMaxRate">Max Rate</label>
+              <input type="number" id="taxMaxRate" step="0.01" placeholder="0.00">
+            </div>
+          </div>
+        </div>
+
+        <div id="percentFields" class="rate-fields hidden">
+          <h4>Percentage Configuration</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="taxPercent">Percentage Rate (%)</label>
+              <input type="number" id="taxPercent" step="0.01" placeholder="5.00">
+            </div>
+            <div class="form-group">
+              <label for="taxPercentApplies">Applies To</label>
+              <select id="taxPercentApplies">
+                <option value="net_room_rate">Net Room Rate</option>
+                <option value="room_rate">Room Rate</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="taxCapNights">Cap Nights (optional)</label>
+            <input type="number" id="taxCapNights" placeholder="Max nights charged">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="taxNotes">Notes</label>
+          <textarea id="taxNotes" rows="3" placeholder="Additional information..."></textarea>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        </div>
+        <p id="formError" class="error"></p>
+        <p id="formSuccess" class="success"></p>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '';
+    let adminToken = localStorage.getItem('adminToken');
+    let editingId = null;
+
+    // Check if already logged in
+    if (adminToken) {
+      checkAuth();
+    }
+
+    // Login form
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      const errorEl = document.getElementById('loginError');
+      errorEl.textContent = '';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          adminToken = data.token;
+          localStorage.setItem('adminToken', adminToken);
+          showAdminPanel();
+        } else {
+          errorEl.textContent = data.error || 'Login failed';
+        }
+      } catch (err) {
+        errorEl.textContent = 'Connection error';
+      }
+    });
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch(`${API_BASE}/api/admin/logout`, {
+        method: 'POST',
+        headers: { 'X-Admin-Token': adminToken }
+      });
+      localStorage.removeItem('adminToken');
+      adminToken = null;
+      document.getElementById('adminPanel').classList.remove('active');
+      document.getElementById('loginContainer').style.display = 'block';
+    });
+
+    // Add new button
+    document.getElementById('addNewBtn').addEventListener('click', () => {
+      editingId = null;
+      document.getElementById('modalTitle').textContent = 'Add City Tax';
+      document.getElementById('taxForm').reset();
+      document.getElementById('taxId').disabled = false;
+      document.getElementById('taxCurrency').value = 'EUR';
+      updateRateFields();
+      openModal();
+    });
+
+    // Basis change handler
+    document.getElementById('taxBasis').addEventListener('change', updateRateFields);
+    document.getElementById('rateType').addEventListener('change', updateRateFields);
+
+    function updateRateFields() {
+      const basis = document.getElementById('taxBasis').value;
+      const rateType = document.getElementById('rateType').value;
+
+      if (basis === 'percent_of_room_rate') {
+        document.getElementById('fixedRangeFields').classList.add('hidden');
+        document.getElementById('percentFields').classList.remove('hidden');
+      } else {
+        document.getElementById('fixedRangeFields').classList.remove('hidden');
+        document.getElementById('percentFields').classList.add('hidden');
+
+        if (rateType === 'fixed') {
+          document.getElementById('fixedFields').classList.remove('hidden');
+          document.getElementById('rangeFields').classList.add('hidden');
+        } else {
+          document.getElementById('fixedFields').classList.add('hidden');
+          document.getElementById('rangeFields').classList.remove('hidden');
+        }
+      }
+    }
+
+    // Tax form submit
+    document.getElementById('taxForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('formError');
+      const successEl = document.getElementById('formSuccess');
+      errorEl.textContent = '';
+      successEl.textContent = '';
+
+      const id = document.getElementById('taxId').value.toUpperCase();
+      const basis = document.getElementById('taxBasis').value;
+
+      const entry = {
+        city: document.getElementById('taxCity').value,
+        countryCode: document.getElementById('taxCountry').value.toUpperCase(),
+        payableLocally: true,
+        basis: basis
+      };
+
+      // Add rate data based on basis
+      if (basis === 'percent_of_room_rate') {
+        entry.percent = {
+          rate: parseFloat(document.getElementById('taxPercent').value) || 0,
+          appliesTo: document.getElementById('taxPercentApplies').value
+        };
+      } else {
+        const rateType = document.getElementById('rateType').value;
+        const currency = document.getElementById('taxCurrency').value || 'EUR';
+
+        if (rateType === 'fixed') {
+          entry.fixed = {
+            amount: parseFloat(document.getElementById('taxFixedAmount').value) || 0,
+            currency: currency
+          };
+        } else {
+          entry.range = {
+            min: parseFloat(document.getElementById('taxMinRate').value) || 0,
+            max: parseFloat(document.getElementById('taxMaxRate').value) || 0,
+            currency: currency
+          };
+        }
+      }
+
+      const capNights = parseInt(document.getElementById('taxCapNights').value);
+      if (capNights > 0) {
+        entry.capNights = capNights;
+      }
+
+      const notes = document.getElementById('taxNotes').value;
+      if (notes) {
+        entry.notes = notes;
+      }
+
+      try {
+        const url = editingId
+          ? `${API_BASE}/api/admin/taxes/${encodeURIComponent(editingId)}`
+          : `${API_BASE}/api/admin/taxes`;
+
+        const res = await fetch(url, {
+          method: editingId ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': adminToken
+          },
+          body: JSON.stringify(editingId ? { entry } : { id, entry })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          successEl.textContent = 'Saved successfully!';
+          setTimeout(() => {
+            closeModal();
+            loadTaxData();
+          }, 1000);
+        } else {
+          errorEl.textContent = data.error || 'Save failed';
+        }
+      } catch (err) {
+        errorEl.textContent = 'Connection error';
+      }
+    });
+
+    async function checkAuth() {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/taxes`, {
+          headers: { 'X-Admin-Token': adminToken }
+        });
+        if (res.ok) {
+          showAdminPanel();
+        } else {
+          localStorage.removeItem('adminToken');
+          adminToken = null;
+        }
+      } catch (err) {
+        localStorage.removeItem('adminToken');
+        adminToken = null;
+      }
+    }
+
+    function showAdminPanel() {
+      document.getElementById('loginContainer').style.display = 'none';
+      document.getElementById('adminPanel').classList.add('active');
+      loadTaxData();
+    }
+
+    async function loadTaxData() {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/taxes`, {
+          headers: { 'X-Admin-Token': adminToken }
+        });
+        const data = await res.json();
+        renderTable(data);
+      } catch (err) {
+        console.error('Failed to load tax data:', err);
+      }
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('taxTable');
+      tbody.innerHTML = '';
+
+      const entries = Object.entries(data).sort((a, b) => a[0].localeCompare(b[0]));
+
+      for (const [id, entry] of entries) {
+        const tr = document.createElement('tr');
+
+        let rateDisplay = '';
+        if (entry.percent) {
+          rateDisplay = `${entry.percent.rate}%`;
+        } else if (entry.fixed) {
+          rateDisplay = `${entry.fixed.amount} ${entry.fixed.currency}`;
+        } else if (entry.range) {
+          rateDisplay = `${entry.range.min}-${entry.range.max} ${entry.range.currency}`;
+        }
+
+        tr.innerHTML = `
+          <td><code>${id}</code></td>
+          <td>${entry.city}</td>
+          <td>${entry.countryCode}</td>
+          <td>${formatBasis(entry.basis)}</td>
+          <td>${rateDisplay}</td>
+          <td>${entry.capNights || '-'}</td>
+          <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${entry.notes || ''}">${entry.notes || '-'}</td>
+          <td class="actions">
+            <button class="btn btn-primary btn-sm" onclick="editEntry('${id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteEntry('${id}')">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function formatBasis(basis) {
+      const map = {
+        'per_person_per_night': 'Per Person/Night',
+        'per_room_per_night': 'Per Room/Night',
+        'percent_of_room_rate': '% of Room Rate'
+      };
+      return map[basis] || basis;
+    }
+
+    async function editEntry(id) {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/taxes`, {
+          headers: { 'X-Admin-Token': adminToken }
+        });
+        const data = await res.json();
+        const entry = data[id];
+
+        if (!entry) return;
+
+        editingId = id;
+        document.getElementById('modalTitle').textContent = 'Edit City Tax';
+        document.getElementById('taxId').value = id;
+        document.getElementById('taxId').disabled = true;
+        document.getElementById('taxCity').value = entry.city;
+        document.getElementById('taxCountry').value = entry.countryCode;
+        document.getElementById('taxBasis').value = entry.basis;
+        document.getElementById('taxCapNights').value = entry.capNights || '';
+        document.getElementById('taxNotes').value = entry.notes || '';
+
+        if (entry.percent) {
+          document.getElementById('taxPercent').value = entry.percent.rate;
+          document.getElementById('taxPercentApplies').value = entry.percent.appliesTo;
+        } else if (entry.fixed) {
+          document.getElementById('rateType').value = 'fixed';
+          document.getElementById('taxFixedAmount').value = entry.fixed.amount;
+          document.getElementById('taxCurrency').value = entry.fixed.currency;
+        } else if (entry.range) {
+          document.getElementById('rateType').value = 'range';
+          document.getElementById('taxMinRate').value = entry.range.min;
+          document.getElementById('taxMaxRate').value = entry.range.max;
+          document.getElementById('taxCurrency').value = entry.range.currency;
+        }
+
+        updateRateFields();
+        openModal();
+      } catch (err) {
+        console.error('Failed to load entry:', err);
+      }
+    }
+
+    async function deleteEntry(id) {
+      if (!confirm(`Are you sure you want to delete ${id}?`)) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/taxes/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: { 'X-Admin-Token': adminToken }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          loadTaxData();
+        } else {
+          alert(data.error || 'Delete failed');
+        }
+      } catch (err) {
+        alert('Connection error');
+      }
+    }
+
+    function openModal() {
+      document.getElementById('modal').classList.add('active');
+      document.getElementById('formError').textContent = '';
+      document.getElementById('formSuccess').textContent = '';
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.remove('active');
+      editingId = null;
+    }
+
+    // Close modal on outside click
+    document.getElementById('modal').addEventListener('click', (e) => {
+      if (e.target.id === 'modal') closeModal();
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+  </script>
+</body>
+</html>
