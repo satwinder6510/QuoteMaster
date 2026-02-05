@@ -368,6 +368,37 @@ Examples of formats that work:
         </div>
       </div>
 
+      <!-- Miscellaneous Local Charges -->
+      <div class="section">
+        <h2>Miscellaneous Local Charges (Pay Locally)</h2>
+        <div style="display: grid; grid-template-columns: 1fr 100px 80px auto; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="miscDescription" placeholder="Description (e.g., Resort fee, Parking)" style="margin-bottom: 0;">
+          <input type="number" id="miscAmount" placeholder="Amount" min="0" step="0.01" style="margin-bottom: 0;">
+          <select id="miscCurrency" style="margin-bottom: 0; padding: 8px;">
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="CHF">CHF</option>
+            <option value="AED">AED</option>
+            <option value="JPY">JPY</option>
+            <option value="THB">THB</option>
+            <option value="AUD">AUD</option>
+            <option value="CAD">CAD</option>
+            <option value="NZD">NZD</option>
+            <option value="SGD">SGD</option>
+            <option value="HKD">HKD</option>
+            <option value="MXN">MXN</option>
+            <option value="ZAR">ZAR</option>
+          </select>
+          <button class="btn-secondary" onclick="addMiscCharge()">Add</button>
+        </div>
+        <div id="miscChargesList" class="item-list"></div>
+        <div id="miscChargesSummary" style="margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 4px; display: none;">
+          <div style="font-weight: bold; color: #166534; margin-bottom: 8px;">Miscellaneous Charges Total</div>
+          <div id="miscChargesDetails"></div>
+        </div>
+      </div>
+
       <!-- Additional Items -->
       <div class="section">
         <h2>Additional Items</h2>
@@ -418,6 +449,8 @@ Examples of formats that work:
     let travellerNames = [''];
     let cities = []; // { name, nights }
     let cityTaxData = null; // API response
+    let miscCharges = []; // { description, amount, currency, gbpAmount }
+    let liveExchangeRates = null; // Live rates from API
 
     // Exchange rates to GBP (update these periodically)
     // Rate = how many units of foreign currency per 1 GBP
@@ -445,6 +478,101 @@ Examples of formats that work:
         currency: currency
       };
     }
+
+    // Fetch live exchange rates from API
+    async function fetchLiveExchangeRates() {
+      try {
+        const res = await fetch('https://api.frankfurter.app/latest?from=GBP');
+        if (res.ok) {
+          const data = await res.json();
+          liveExchangeRates = data.rates;
+          liveExchangeRates.GBP = 1;
+          console.log('Live exchange rates loaded:', liveExchangeRates);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch live exchange rates, using fallback rates:', e);
+      }
+    }
+
+    // Convert to GBP using live rates (with fallback)
+    function convertToGBPLive(amount, currency) {
+      const rates = liveExchangeRates || exchangeRates;
+      const rate = rates[currency];
+      if (!rate) return { gbp: amount, rate: 1, currency: 'GBP' };
+      return {
+        gbp: amount / rate,
+        rate: rate,
+        currency: currency
+      };
+    }
+
+    // Add miscellaneous charge
+    async function addMiscCharge() {
+      const desc = document.getElementById('miscDescription').value.trim();
+      const amount = parseFloat(document.getElementById('miscAmount').value);
+      const currency = document.getElementById('miscCurrency').value;
+
+      if (!desc || isNaN(amount) || amount <= 0) {
+        alert('Please enter a description and valid amount');
+        return;
+      }
+
+      // Fetch live rates if not already loaded
+      if (!liveExchangeRates) {
+        await fetchLiveExchangeRates();
+      }
+
+      const conversion = convertToGBPLive(amount, currency);
+      miscCharges.push({
+        description: desc,
+        amount: amount,
+        currency: currency,
+        gbpAmount: conversion.gbp,
+        rate: conversion.rate
+      });
+
+      document.getElementById('miscDescription').value = '';
+      document.getElementById('miscAmount').value = '';
+      renderMiscCharges();
+      generatePreview();
+    }
+
+    // Remove miscellaneous charge
+    function removeMiscCharge(index) {
+      miscCharges.splice(index, 1);
+      renderMiscCharges();
+      generatePreview();
+    }
+
+    // Render miscellaneous charges list
+    function renderMiscCharges() {
+      const list = document.getElementById('miscChargesList');
+      const summary = document.getElementById('miscChargesSummary');
+      const details = document.getElementById('miscChargesDetails');
+
+      list.innerHTML = miscCharges.map((charge, i) => `
+        <div class="item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f9fafb; border-radius: 4px; margin-bottom: 4px;">
+          <span><strong>${charge.description}</strong> - ${charge.currency} ${charge.amount.toFixed(2)} (≈ £${charge.gbpAmount.toFixed(2)})</span>
+          <button class="btn-danger" onclick="removeMiscCharge(${i})" style="padding: 4px 8px; font-size: 12px;">×</button>
+        </div>
+      `).join('');
+
+      if (miscCharges.length > 0) {
+        const totalGBP = miscCharges.reduce((sum, c) => sum + c.gbpAmount, 0);
+        details.innerHTML = `
+          <div style="font-size: 13px; color: #166534;">
+            Total: ≈ £${totalGBP.toFixed(2)} GBP
+            <span style="font-size: 11px; color: #6b7280; margin-left: 8px;">(Live exchange rates from frankfurter.app)</span>
+          </div>
+        `;
+        summary.style.display = 'block';
+      } else {
+        summary.style.display = 'none';
+      }
+    }
+
+    // Fetch live rates on page load
+    fetchLiveExchangeRates();
 
     // Traveller name fields
     function updateTravellerFields() {
@@ -1087,10 +1215,14 @@ Examples of formats that work:
         localTaxGBPStr = `£${localTaxGBP.toFixed(2)}`;
       }
 
+      // Calculate miscellaneous charges total
+      const miscTotalGBP = miscCharges.reduce((sum, c) => sum + c.gbpAmount, 0);
+      const hasMiscCharges = miscCharges.length > 0;
+
       // TOTAL COSTS FOR THIS HOLIDAY (all in GBP)
-      let grandTotalGBP = totalPriceNum + localTaxGBP;
+      let grandTotalGBP = totalPriceNum + localTaxGBP + miscTotalGBP;
       let grandTotalStr = totalPrice;
-      if (totalPriceNum > 0 && hasCityTax) {
+      if (totalPriceNum > 0 && (hasCityTax || hasMiscCharges)) {
         grandTotalStr = '£' + grandTotalGBP.toLocaleString('en-GB', {minimumFractionDigits: 0, maximumFractionDigits: 0});
       }
 
@@ -1098,7 +1230,7 @@ Examples of formats that work:
           <tr>
             <td style="padding: 20px; background-color: #1a365d; text-align: center;">
               <font color="#ffffff"><span style="font-size: 12px; color: #90cdf4;">TOTAL COSTS FOR THIS HOLIDAY</span></font><br>
-              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person × ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}${hasCityTax ? ' + City Tax' : ''}</span></font><br>
+              <font color="#ffffff"><span style="font-size: 14px; color: #ffffff;">${price} per person × ${numTravellers} traveller${numTravellers > 1 ? 's' : ''}${hasCityTax ? ' + City Tax' : ''}${hasMiscCharges ? ' + Local Charges' : ''}</span></font><br>
               <font color="#ffffff"><span style="font-size: 28px; font-weight: bold; color: #ffffff;">${grandTotalStr}</span></font>
             </td>
           </tr>`;
@@ -1177,6 +1309,44 @@ Examples of formats that work:
 
         html += `
               </table>
+            </td>
+          </tr>`;
+      }
+
+      // Miscellaneous local charges section
+      if (hasMiscCharges) {
+        html += `
+          <tr>
+            <td style="padding: 16px; background-color: #f0fdf4; border: 2px solid #22c55e;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: left;">
+                    <span style="font-size: 12px; color: #166534; font-weight: bold;">PAY LOCALLY</span><br>
+                    <span style="font-size: 11px; color: #15803d;">Miscellaneous charges payable locally</span>
+                  </td>
+                  <td style="text-align: right;">
+                    <span style="font-size: 22px; font-weight: bold; color: #166534;">£${miscTotalGBP.toFixed(2)}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; background-color: #dcfce7;">
+              <div style="font-size: 12px; color: #166534; margin-bottom: 8px;"><strong>Charges Breakdown:</strong></div>
+              <table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-size: 12px; color: #15803d;">`;
+
+        miscCharges.forEach(charge => {
+          html += `
+                <tr>
+                  <td style="padding: 4px 0;">${charge.description}</td>
+                  <td style="padding: 4px 0; text-align: right;">${charge.currency} ${charge.amount.toFixed(2)} (≈ £${charge.gbpAmount.toFixed(2)})</td>
+                </tr>`;
+        });
+
+        html += `
+              </table>
+              <div style="font-size: 10px; color: #6b7280; margin-top: 8px;">Exchange rates from frankfurter.app (live)</div>
             </td>
           </tr>`;
       }
