@@ -2,8 +2,35 @@ const express = require('express');
 const cors = require('cors');
 const cheerio = require('cheerio');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const { findTaxRule, calculateTax, getAvailableCities, getAllTaxEntries, setTaxEntry, deleteTaxEntry } = require('./city-taxes');
+
+// Quote logs file path
+const QUOTE_LOGS_FILE = path.join(__dirname, 'data', 'quote-logs.json');
+
+// Load existing quote logs
+function loadQuoteLogs() {
+  try {
+    if (fs.existsSync(QUOTE_LOGS_FILE)) {
+      return JSON.parse(fs.readFileSync(QUOTE_LOGS_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.error('Error loading quote logs:', e);
+  }
+  return [];
+}
+
+// Save quote logs
+function saveQuoteLogs(logs) {
+  try {
+    fs.writeFileSync(QUOTE_LOGS_FILE, JSON.stringify(logs, null, 2));
+    return true;
+  } catch (e) {
+    console.error('Error saving quote logs:', e);
+    return false;
+  }
+}
 
 const app = express();
 app.use(cors());
@@ -464,6 +491,52 @@ app.get('/', (req, res) => {
 // Serve the admin page
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Log quote generation
+app.post('/api/log-quote', (req, res) => {
+  try {
+    const { reference, customerNames, packageTitle, destination, numTravellers, pricePerPerson, totalPrice, cityTax, miscCharges, cities, flights } = req.body;
+
+    if (!reference) {
+      return res.status(400).json({ error: 'Quote reference is required' });
+    }
+
+    const logEntry = {
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      reference,
+      customerNames: customerNames || '',
+      packageTitle: packageTitle || '',
+      destination: destination || '',
+      numTravellers: numTravellers || 1,
+      pricePerPerson: pricePerPerson || '',
+      totalPrice: totalPrice || '',
+      cityTax: cityTax || '',
+      miscCharges: miscCharges || 0,
+      cities: cities || [],
+      flights: flights || []
+    };
+
+    const logs = loadQuoteLogs();
+    logs.push(logEntry);
+
+    if (saveQuoteLogs(logs)) {
+      console.log('Quote logged:', reference);
+      res.json({ success: true, id: logEntry.id });
+    } else {
+      res.status(500).json({ error: 'Failed to save log' });
+    }
+  } catch (error) {
+    console.error('Log quote error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get quote logs (admin)
+app.get('/api/quote-logs', requireAdminAuth, (req, res) => {
+  const logs = loadQuoteLogs();
+  res.json(logs);
 });
 
 const PORT = process.env.PORT || 3000;

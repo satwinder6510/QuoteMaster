@@ -1384,6 +1384,62 @@ Examples of formats that work:
       document.getElementById('preview').innerHTML = html;
     }
 
+    // Log quote to server
+    async function logQuote() {
+      try {
+        const ref = document.getElementById('quoteRef').value;
+        const names = travellerNames.filter(n => n.trim()).join(', ');
+        const title = document.getElementById('packageTitle').value || document.getElementById('packageTitleManual').value;
+        const numTravellers = parseInt(document.getElementById('numTravellers').value) || 1;
+        const price = document.getElementById('priceManual').value || document.getElementById('packagePrice').value || '';
+
+        // Calculate total
+        let totalPrice = '';
+        const priceNum = parseFloat(price.replace(/[£,]/g, ''));
+        if (!isNaN(priceNum)) {
+          totalPrice = '£' + (priceNum * numTravellers).toLocaleString('en-GB');
+        }
+
+        // Get city tax info
+        let cityTaxStr = '';
+        if (cityTaxData && (cityTaxData.totalMin > 0 || cityTaxData.totalMax > 0)) {
+          const curr = cityTaxData.currencies?.[0] || 'EUR';
+          cityTaxStr = `${curr} ${cityTaxData.totalMax.toFixed(2)}`;
+        }
+
+        // Calculate misc charges total
+        const miscTotal = miscCharges.reduce((sum, c) => sum + c.gbpAmount, 0);
+
+        // Get first destination from cities or package title
+        const destination = cities.length > 0 ? cities[0].name : '';
+
+        await fetch('/api/log-quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reference: ref,
+            customerNames: names,
+            packageTitle: title,
+            destination: destination,
+            numTravellers: numTravellers,
+            pricePerPerson: price,
+            totalPrice: totalPrice,
+            cityTax: cityTaxStr,
+            miscCharges: miscTotal,
+            cities: cities.map(c => c.name),
+            flights: flights.filter(f => f.from || f.to).map(f => ({
+              from: f.from,
+              to: f.to,
+              date: f.date
+            }))
+          })
+        });
+        console.log('Quote logged:', ref);
+      } catch (e) {
+        console.warn('Failed to log quote:', e);
+      }
+    }
+
     // Copy to Clipboard (for Outlook)
     async function copyToClipboard() {
       const preview = document.getElementById('preview');
@@ -1394,6 +1450,9 @@ Examples of formats that work:
         const blob = new Blob([preview.innerHTML], { type: 'text/html' });
         const clipboardItem = new ClipboardItem({ 'text/html': blob });
         await navigator.clipboard.write([clipboardItem]);
+
+        // Log the quote
+        await logQuote();
 
         status.innerHTML = '<div class="success">Copied! Paste into Outlook with Ctrl+V</div>';
         setTimeout(() => { status.innerHTML = ''; }, 3000);
@@ -1406,6 +1465,9 @@ Examples of formats that work:
         selection.addRange(range);
         document.execCommand('copy');
         selection.removeAllRanges();
+
+        // Log the quote
+        await logQuote();
 
         status.innerHTML = '<div class="success">Copied! Paste into Outlook with Ctrl+V</div>';
         setTimeout(() => { status.innerHTML = ''; }, 3000);
